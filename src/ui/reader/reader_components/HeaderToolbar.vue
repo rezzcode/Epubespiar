@@ -9,8 +9,6 @@
             <span class="sidebar-text">Epubespiar</span>
           </strong>
         </button>
-        <button @click="$emit('scroll-up')" class="nav-button" title="Scroll Up">▲</button>
-        <button @click="$emit('scroll-down')" class="nav-button" title="Scroll Down">▼</button>
         <div class="page-indicator">
           <span>{{ currentPage }} of {{ totalPages }}</span>
         </div>
@@ -58,33 +56,6 @@
           
           <!-- Show these buttons only when a book is loaded -->
           <div v-if="isBookLoaded" class="book-controls">
-            <div class="search-container" :class="{ 'search-open': searchOpen }">
-              <button @click="toggleSearch" title="Search">
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-search" viewBox="0 0 16 16">
-                  <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001q.044.06.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1 1 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/>
-                </svg>
-              </button>
-              <div v-if="searchOpen" class="search-input-container">
-                <input 
-                  type="text" 
-                  v-model="searchQuery"
-                  @keyup.enter="performSearch"
-                  placeholder="Search in book..."
-                  ref="searchInput"
-                >
-                <div v-if="searchResults.length > 0" class="search-results">
-                  <div 
-                    v-for="(result, index) in searchResults" 
-                    :key="index"
-                    class="search-result-item"
-                    @click="goToSearchResult(result)"
-                  >
-                    {{ result.text }}
-                  </div>
-                </div>
-              </div>
-            </div>
-
             <button @click="toggleFullscreen" title="Enter full Screen">
               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrows-angle-expand" viewBox="0 0 16 16">
                 <path fill-rule="evenodd" d="M5.828 10.172a.5.5 0 0 0-.707 0l-4.096 4.096V11.5a.5.5 0 0 0-1 0v3.975a.5.5 0 0 0 .5.5H4.5a.5.5 0 0 0 0-1H1.732l4.096-4.096a.5.5 0 0 0 0-.707m4.344-4.344a.5.5 0 0 0 .707 0l4.096-4.096V4.5a.5.5 0 1 0 1 0V.525a.5.5 0 0 0-.5-.5H11.5a.5.5 0 0 0 0 1h2.768l-4.096 4.096a.5.5 0 0 0 0 .707"/>

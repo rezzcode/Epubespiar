@@ -19,10 +19,7 @@
       @zoom-out="zoomOut"
       @zoom-change="changeZoom"
       @file-selected="loadEpub"
-      @toggle-search="toggleSearch"
       @toggle-fullscreen="toggleFullscreen"
-      @search="performSearch"
-      @go-to-search-result="goToSearchResult"
     />
     
     <div class="main-content">
@@ -56,7 +53,7 @@ export default {
     HeaderToolbar,
     SidebarComponent
   },
-  setup() {
+  setup(props, { emit }) {
     const { addNotification } = useNotification();
     const sidebarOpen = ref(false);
     const currentPage = ref(1);
@@ -210,47 +207,6 @@ export default {
       if (e.key === 'ArrowRight') scrollDown();
     };
 
-    const toggleSearch = (isOpen) => {
-      if (!isOpen) {
-        // Clear search results when closing search
-        if (rendition.value) {
-          rendition.value.annotations.remove('search');
-        }
-      }
-    };
-
-    const performSearch = async (query) => {
-      if (!book.value || !rendition.value) return;
-      
-      try {
-        // Remove any existing search highlights
-        rendition.value.annotations.remove('search');
-        
-        // Perform the search
-        const results = await book.value.search(query);
-        
-        // Highlight all matches
-        results.forEach(result => {
-          rendition.value.annotations.add('search', result.cfi, {}, null, 'hl', { 'fill': 'yellow', 'fill-opacity': '0.3' });
-        });
-
-        // Emit results to HeaderToolbar
-        emit('search-results', results.map(result => ({
-          text: result.excerpt,
-          cfi: result.cfi
-        })));
-      } catch (error) {
-        console.error('Search error:', error);
-        addNotification({ message: 'Failed to perform search', type: 'error' });
-      }
-    };
-
-    const goToSearchResult = (result) => {
-      if (rendition.value && result.cfi) {
-        rendition.value.display(result.cfi);
-      }
-    };
-
     const toggleFullscreen = () => {
       if (!document.fullscreenElement) {
         document.documentElement.requestFullscreen();
@@ -324,10 +280,7 @@ export default {
       handleDragEnter,
       handleDragLeave,
       handleDrop,
-      toggleSearch,
       toggleFullscreen,
-      performSearch,
-      goToSearchResult,
       isBookLoaded
     };
   }

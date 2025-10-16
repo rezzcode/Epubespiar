@@ -11,7 +11,7 @@ const RATE_LIMIT = {
 const messageRateLimit = new Map();
 
 // Track open reader tabs with their instance IDs
-const readerTabs = new Map(); // Changed from Set to Map to store instance IDs
+const readerTabs = new Map();
 
 // Function to generate random instance ID
 function generateInstanceId() {
@@ -23,8 +23,8 @@ function isValidEpubUrl(url) {
   try {
     const urlObj = new URL(url);
     return urlObj.pathname.toLowerCase().endsWith('.epub') &&
-           (urlObj.protocol === 'https:' || urlObj.protocol === 'file:' || urlObj.protocol === 'epub:') &&
-           urlObj.pathname.length < 2048; // Prevent path traversal
+           (urlObj.protocol === 'https:' || urlObj.protocol === 'http:' || urlObj.protocol === 'file:' || urlObj.protocol === 'epub:') &&
+           urlObj.pathname.length < 2048;
   } catch {
     return false;
   }
@@ -49,6 +49,48 @@ function checkRateLimit(senderId) {
   return true;
 }
 
+// Function to download and open EPUB
+async function downloadAndOpenEpub(epubUrl) {
+  try {
+    // Create a unique filename
+    const filename = `epub_${Date.now()}.epub`;
+    
+    // Start the download
+    const downloadId = await browser.downloads.download({
+      url: epubUrl,
+      filename: filename,
+      saveAs: false
+    });
+
+    // Wait for download to complete
+    return new Promise((resolve, reject) => {
+      const listener = (downloadDelta) => {
+        if (downloadDelta.id === downloadId) {
+          if (downloadDelta.state && downloadDelta.state.current === 'complete') {
+            browser.downloads.onChanged.removeListener(listener);
+            // Query the download item to get the final filename
+            browser.downloads.search({ id: downloadId }).then((items) => {
+              if (items && items.length > 0 && items[0].filename) {
+                const p = items[0].filename;
+                const fileUrl = p.startsWith('file://') ? p : 'file://' + (p[0] === '/' ? '' : '/') + p.replace(/\\/g, '/');
+                resolve(fileUrl);
+              } else {
+                reject(new Error('Failed to get download filename'));
+              }
+            }).catch(reject);
+          } else if (downloadDelta.error) {
+            browser.downloads.onChanged.removeListener(listener);
+            reject(new Error(downloadDelta.error.current));
+          }
+        }
+      };
+      browser.downloads.onChanged.addListener(listener);
+    });
+  } catch (error) {
+    throw new Error('Failed to download EPUB: ' + error.message);
+  }
+}
+
 // Function to open or focus the reader tab
 async function openReaderTab(epubUrl = null, isNewInstance = false) {
   try {
@@ -58,11 +100,21 @@ async function openReaderTab(epubUrl = null, isNewInstance = false) {
 
     const readerURL = browser.runtime.getURL("src/ui/reader/index.html");
     const instanceId = generateInstanceId();
-    const finalURL = epubUrl 
-      ? `${readerURL}?file=${encodeURIComponent(epubUrl)}&instance=${instanceId}`
+    
+    // Handle different protocols
+    let finalUrl = epubUrl;
+    if (epubUrl) {
+      const urlObj = new URL(epubUrl);
+      if (urlObj.protocol === 'http:' || urlObj.protocol === 'https:') {
+        // Download first for HTTP/HTTPS URLs
+        finalUrl = await downloadAndOpenEpub(epubUrl);
+      }
+    }
+
+    const finalURL = finalUrl 
+      ? `${readerURL}?file=${encodeURIComponent(finalUrl)}&instance=${instanceId}`
       : `${readerURL}?instance=${instanceId}`;
     
-    // Always create a new tab with a unique instance ID
     const tab = await browser.tabs.create({ url: finalURL });
     readerTabs.set(tab.id, instanceId);
     return tab;
@@ -72,7 +124,7 @@ async function openReaderTab(epubUrl = null, isNewInstance = false) {
       type: 'SHOW_NOTIFICATION',
       notification: {
         type: 'error',
-        message: 'Failed to open reader'
+        message: 'Failed to open reader: ' + error.message
       }
     }).catch(console.error);
     throw error;
@@ -91,22 +143,6 @@ browser.action.onClicked.addListener((tab) => {
   });
 });
 
-// Intercept downloads
-browser.downloads.onCreated.addListener(async (downloadItem) => {
-  if (isValidEpubUrl(downloadItem.url)) {
-    try {
-      // Cancel the download
-      await browser.downloads.cancel(downloadItem.id);
-      await browser.downloads.erase({ id: downloadItem.id });
-      
-      // Open in reader instead
-      await openReaderTab(downloadItem.url);
-    } catch (error) {
-      console.error('Error intercepting download');
-    }
-  }
-});
-
 // Handle tab removal
 browser.tabs.onRemoved.addListener((tabId) => {
   readerTabs.delete(tabId);
@@ -114,9 +150,7 @@ browser.tabs.onRemoved.addListener((tabId) => {
 
 // Handle protocol registration
 browser.runtime.onMessage.addListener((message, sender) => {
-  // Return a promise for proper async handling
   return new Promise((resolve, reject) => {
-    // Check rate limit
     if (!checkRateLimit(sender.id)) {
       reject(new Error('Rate limit exceeded'));
       return;
@@ -125,21 +159,14 @@ browser.runtime.onMessage.addListener((message, sender) => {
     if (message.type === 'OPEN_READER' && message.epubUrl) {
       openReaderTab(message.epubUrl)
         .then(() => resolve({ success: true }))
-        .catch(() => {
-          console.error('Error handling message');
-          reject(new Error('Failed to open reader'));
-        });
+        .catch(error => reject(error));
     } else if (message.type === 'EPUB_DRAGSTART') {
-      // Tell content script it's okay to handle this drag
       resolve({ shouldHandle: isValidEpubUrl(message.url) });
     } else if (message.type === 'EPUB_DROP') {
       if (isValidEpubUrl(message.url)) {
         openReaderTab(message.url)
           .then(() => resolve({ success: true }))
-          .catch(() => {
-            console.error('Error handling message');
-            reject(new Error('Failed to open reader'));
-          });
+          .catch(error => reject(error));
       } else {
         reject(new Error('Invalid EPUB URL'));
       }
