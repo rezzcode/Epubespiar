@@ -23,6 +23,13 @@
     />
     
     <div class="main-content">
+      <!-- Backdrop overlay for mobile -->
+      <div 
+        v-if="sidebarOpen" 
+        class="sidebar-backdrop"
+        @click="toggleSidebar"
+      ></div>
+      
       <sidebar-component 
         :isOpen="sidebarOpen" 
         :toc="tableOfContents"
@@ -68,10 +75,10 @@ export default {
     // Maximum file size (100MB)
     const MAX_FILE_SIZE = 100 * 1024 * 1024;
     const ALLOWED_TYPES = ['application/epub+zip'];
+    const MIN_SWIPE_DISTANCE = 50; // Minimum pixels for swipe gesture
 
     const toggleSidebar = () => {
       sidebarOpen.value = !sidebarOpen.value;
-      document.documentElement.style.setProperty("--sidebar-size", sidebarOpen.value ? "390px" : "240px");
     };
 
     const scrollUp = () => {
@@ -177,6 +184,10 @@ export default {
     const navigateToLocation = (href) => {
       if (rendition.value) {
         rendition.value.display(href);
+        // Close sidebar on mobile after navigation for better UX
+        if (window.innerWidth < 768) {
+          sidebarOpen.value = false;
+        }
       }
     };
 
@@ -205,6 +216,31 @@ export default {
       if (document.activeElement.tagName === 'INPUT') return;
       if (e.key === 'ArrowLeft') scrollUp();
       if (e.key === 'ArrowRight') scrollDown();
+    };
+
+    // Touch gesture handling for mobile
+    let touchStartX = 0;
+    let touchStartY = 0;
+    
+    const handleTouchStart = (e) => {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+    };
+
+    const handleTouchEnd = (e) => {
+      const touchEndX = e.changedTouches[0].clientX;
+      const touchEndY = e.changedTouches[0].clientY;
+      const deltaX = touchEndX - touchStartX;
+      const deltaY = touchEndY - touchStartY;
+      
+      // Swipe detection
+      if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > MIN_SWIPE_DISTANCE) {
+        if (deltaX > 0) {
+          scrollUp(); // Swipe right
+        } else {
+          scrollDown(); // Swipe left
+        }
+      }
     };
 
     const toggleFullscreen = () => {
@@ -245,10 +281,22 @@ export default {
       }
     };
 
+    const handleResize = () => {
+      // Resize rendition when window size changes
+      if (rendition.value) {
+        nextTick(() => {
+          rendition.value.resize();
+        });
+      }
+    };
+
     onMounted(() => {
       document.addEventListener('keyup', handleKeyUp);
+      window.addEventListener('resize', handleResize);
       if (bookContent.value) {
         bookContent.value.addEventListener("wheel", handleMouseScroll);
+        bookContent.value.addEventListener('touchstart', handleTouchStart, { passive: true });
+        bookContent.value.addEventListener('touchend', handleTouchEnd, { passive: true });
       }
       // Load book from URL if present
       loadBookFromUrl();
@@ -256,8 +304,15 @@ export default {
 
     onUnmounted(() => {
       document.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('resize', handleResize);
       if (bookContent.value) {
         bookContent.value.removeEventListener("wheel", handleMouseScroll);
+        bookContent.value.removeEventListener('touchstart', handleTouchStart, { passive: true });
+        bookContent.value.removeEventListener('touchend', handleTouchEnd, { passive: true });
+      }
+      // Clean up book resources
+      if (book.value) {
+        book.value.destroy();
       }
     });
 
@@ -303,14 +358,57 @@ export default {
   position: relative;
 }
 
+.sidebar-backdrop {
+  position: fixed;
+  top: 36px; /* Height of header toolbar */
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 50;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 #book-content {
   flex: 1;
   overflow-y: auto;
-  padding: 10px 240px;
+  padding: 20px;
   transition: transform 0.3s ease;
   background-color: var(--background-color);
   height: 100vh;
-  padding-left: var(--sidebar-size);
+  max-width: 1200px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* Desktop: comfortable reading width */
+@media (min-width: 1024px) {
+  #book-content {
+    padding: 40px 80px;
+  }
+}
+
+/* Tablet: medium padding */
+@media (min-width: 768px) and (max-width: 1023px) {
+  #book-content {
+    padding: 30px 40px;
+  }
+}
+
+/* Mobile: minimal padding */
+@media (max-width: 767px) {
+  #book-content {
+    padding: 15px;
+  }
 }
 
 @media (prefers-color-scheme: dark) {

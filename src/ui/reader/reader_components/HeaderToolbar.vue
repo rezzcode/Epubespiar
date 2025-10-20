@@ -309,6 +309,7 @@
     }
   }
   
+  /* Tablet and below: Hide sidebar text */
   @media (max-width: 768px) {
     .sidebar-text {
       display: none;
@@ -316,15 +317,51 @@
     
     select {
       max-width: 100px;
+      font-size: 12px;
+    }
+    
+    button {
+      padding: 4px;
+      margin: 0 3px;
     }
   }
   
+  /* Mobile: More compact layout */
   @media (max-width: 480px) {
-    .nav-button {
-      display: none;
+    .header-toolbar {
+      padding: 2px 5px;
+      height: 32px;
+    }
+    
+    .middle-toolbar select {
+      font-size: 11px;
+      padding: 1px;
     }
     
     .page-indicator {
+      font-size: 12px;
+      margin-left: 5px;
+    }
+    
+    .open-epub-button {
+      font-size: 12px;
+      padding: 3px 6px;
+    }
+    
+    .open-epub-button svg {
+      width: 14px;
+      height: 14px;
+    }
+    
+    button svg {
+      width: 14px;
+      height: 14px;
+    }
+  }
+  
+  /* Very small screens: Hide zoom controls */
+  @media (max-width: 360px) {
+    .middle-toolbar {
       display: none;
     }
   }

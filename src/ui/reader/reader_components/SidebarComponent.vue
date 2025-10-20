@@ -40,25 +40,32 @@
   
   <style scoped>
   .sidebar {
-    width: 250px;
+    width: 280px;
     background-color: var(--sidebar-bg-color, #d4d4d7);
     height: 100%;
-    position: absolute;
-    left: -250px;
-    transition: transform 0.3s ease;
-    z-index: 10;
+    position: fixed;
+    left: 0;
+    top: 36px; /* Height of header toolbar */
+    transform: translateX(-100%);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    z-index: 100;
     overflow-y: auto;
     border-right: 2px solid var(--toolbar-sp-color, #6a666687);
+    box-shadow: none;
   }
   
   .sidebar.open {
-    transform: translateX(250px);
+    transform: translateX(0);
+    box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15);
   }
   
   .sidebar-header {
     padding: 6px;
     background-color: var(--toolbar-bg-color);
     border-bottom: 2px solid var(--toolbar-sp-color, #6a666687);
+    position: sticky;
+    top: 0;
+    z-index: 1;
   }
   
   .sidebar-header h3 {
@@ -87,6 +94,7 @@
     text-decoration: none;
     display: block;
     padding: 5px 0;
+    transition: color 0.2s ease;
   }
   
   .toc-item a:hover {
@@ -103,12 +111,30 @@
     margin-bottom: 5px;
   }
   
+  /* Mobile: Narrower sidebar */
+  @media (max-width: 767px) {
+    .sidebar {
+      width: 240px;
+    }
+  }
+  
+  /* Tablet and up: Wider sidebar */
+  @media (min-width: 768px) {
+    .sidebar {
+      width: 320px;
+    }
+  }
+  
   @media (prefers-color-scheme: dark) {
     .sidebar {
       --sidebar-bg-color: #2a2a2e;
       --text-color: #f5f5f5;
       --hover-outline-color: #8f8f9d;
       --toolbar-sp-color: #00000063;
+    }
+    
+    .sidebar.open {
+      box-shadow: 2px 0 8px rgba(0, 0, 0, 0.3);
     }
   }
 </style>
