@@ -10,7 +10,7 @@
           </strong>
         </button>
         <div class="page-indicator">
-          <span>{{ currentPage }} of {{ totalPages }}</span>
+          <span>{{ currentPage }}% of {{ totalPages }}</span>
         </div>
       </div>
       
@@ -34,6 +34,24 @@
           <option value="175">175%</option>
           <option value="200">200%</option>
         </select>
+        
+        <!-- Font Size Control -->
+        <div v-if="isBookLoaded" class="font-size-control">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" class="font-icon">
+            <path d="M2.244 13.081a1 1 0 0 1-.746-1.651l5-5.5a1 1 0 0 1 1.492 0l5 5.5a1 1 0 1 1-1.492 1.357L7 7.59l-4.498 4.94a1 1 0 0 1-.746.338zM9 4h1.5a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-1 0v-.5H9v4h.5a.5.5 0 0 1 0 1h-3a.5.5 0 0 1 0-1H7V5H5.5v.5a.5.5 0 0 1-1 0v-1a.5.5 0 0 1 .5-.5H9z"/>
+          </svg>
+          <input 
+            type="range" 
+            :value="fontSize" 
+            @input="onFontSizeChange($event)"
+            min="14" 
+            max="30" 
+            step="2"
+            class="font-slider"
+            title="Font Size"
+          />
+          <span class="font-size-value">{{ fontSize }}</span>
+        </div>
       </div>
       
       <div class="right-toolbar">
@@ -110,12 +128,14 @@
     props: {
       currentPage: { type: Number, default: 1 },
       totalPages: { type: Number, default: 0 },
-      isBookLoaded: { type: Boolean, default: false }
+      isBookLoaded: { type: Boolean, default: false },
+      fontSize: { type: Number, default: 16 }
     },
     emits: [
       'toggle-sidebar', 
       'scroll-up', 'scroll-down', 
       'zoom-in', 'zoom-out', 'zoom-change',
+      'font-size-change',
       'file-selected', 
       'go-to-first', 'go-to-last', 
       'set-vertical-scroll', 'set-horizontal-scroll',
@@ -141,6 +161,10 @@
   
       const onZoomChange = (event) => {
         emit('zoom-change', event.target.value);
+      };
+
+      const onFontSizeChange = (event) => {
+        emit('font-size-change', event.target.value);
       };
   
       const triggerFileInput = () => {
@@ -203,7 +227,7 @@
   
       return {
         settingsOpen, fileInput, searchOpen, searchQuery, searchResults, searchInput,
-        toggleSettings, onZoomChange, triggerFileInput, onFileSelected, 
+        toggleSettings, onZoomChange, onFontSizeChange, triggerFileInput, onFileSelected, 
         emitAndClose, toggleSearch, toggleFullscreen, performSearch, goToSearchResult
       };
     }
@@ -253,6 +277,34 @@
     border-radius: 4px;
     background-color: var(--toolbar-bg-color, #f5f6f7);
     border: 1px solid #ccc;
+    color: var(--text-color, #333);
+  }
+
+  .font-size-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background-color: var(--background-color, rgba(102, 102, 102, 0.1));
+    border-radius: 6px;
+    padding: 4px 12px;
+    margin-left: 8px;
+  }
+
+  .font-icon {
+    flex-shrink: 0;
+  }
+
+  .font-slider {
+    width: 96px;
+    height: 4px;
+    cursor: pointer;
+    accent-color: var(--hover-outline-color, #646cff);
+  }
+
+  .font-size-value {
+    font-size: 12px;
+    min-width: 24px;
+    text-align: center;
     color: var(--text-color, #333);
   }
   
@@ -324,6 +376,20 @@
       padding: 4px;
       margin: 0 3px;
     }
+
+    .font-size-control {
+      padding: 3px 8px;
+      gap: 6px;
+    }
+
+    .font-slider {
+      width: 72px;
+    }
+
+    .font-size-value {
+      font-size: 11px;
+      min-width: 20px;
+    }
   }
   
   /* Mobile: More compact layout */
@@ -357,11 +423,39 @@
       width: 14px;
       height: 14px;
     }
+
+    .font-size-control {
+      padding: 2px 6px;
+      gap: 4px;
+      margin-left: 4px;
+    }
+
+    .font-slider {
+      width: 60px;
+    }
+
+    .font-icon {
+      width: 12px;
+      height: 12px;
+    }
+
+    .font-size-value {
+      font-size: 10px;
+      min-width: 18px;
+    }
   }
   
-  /* Very small screens: Hide zoom controls */
+  /* Very small screens: Hide zoom and font controls */
   @media (max-width: 360px) {
     .middle-toolbar {
+      display: none;
+    }
+  }
+
+  /* Small screens: Keep only font control visible in middle toolbar */
+  @media (min-width: 361px) and (max-width: 480px) {
+    .middle-toolbar > button,
+    .middle-toolbar > select {
       display: none;
     }
   }

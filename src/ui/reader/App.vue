@@ -12,12 +12,14 @@
       :currentPage="currentPage" 
       :totalPages="totalPages"
       :isBookLoaded="isBookLoaded"
+      :fontSize="fontSize"
       @toggle-sidebar="toggleSidebar"
       @scroll-up="scrollUp"
       @scroll-down="scrollDown"
       @zoom-in="zoomIn"
       @zoom-out="zoomOut"
       @zoom-change="changeZoom"
+      @font-size-change="changeFontSize"
       @file-selected="loadEpub"
       @toggle-fullscreen="toggleFullscreen"
     />
@@ -40,7 +42,6 @@
         id="book-content" 
         ref="bookContent" 
         :style="{ transform: `scale(${zoomLevel})` }"
-        @scroll="handleScroll"
       ></div>
     </div>
   </div>
@@ -52,7 +53,7 @@ import HeaderToolbar from './reader_components/HeaderToolbar.vue';
 import SidebarComponent from './reader_components/SidebarComponent.vue';
 import useNotification from '../../composables/useNotification';
 import jszip from 'jszip';
-import ePub from 'epubjs';
+import ePub, { Rendition, Book as EpubBook } from 'epubjs';
 import { validateFile, sanitizeHTML } from '../../utils/security';
 
 export default {
@@ -63,14 +64,15 @@ export default {
   setup(props, { emit }) {
     const { addNotification } = useNotification();
     const sidebarOpen = ref(false);
-    const currentPage = ref(1);
-    const totalPages = ref(0);
+    const currentPage = ref(0);
+    const totalPages = ref(100);
     const zoomLevel = ref(1);
     const bookContent = ref(null);
     const book = ref(null);
     const rendition = ref(null);
     const tableOfContents = ref([]);
     const isDragging = ref(false);
+    const fontSize = ref(16); // Font size in pixels (14-30 range)
 
     // Maximum file size (100MB)
     const MAX_FILE_SIZE = 100 * 1024 * 1024;
@@ -82,18 +84,14 @@ export default {
     };
 
     const scrollUp = () => {
-      if (bookContent.value) {
+      if (rendition.value) {
         rendition.value.prev();
-        bookContent.value.scrollBy({ top: -100, behavior: 'smooth' });
-        updatePageNumber(-1);
       }
     };
 
     const scrollDown = () => {
-      if (bookContent.value) {
+      if (rendition.value) {
         rendition.value.next();
-        bookContent.value.scrollBy({ top: 100, behavior: 'smooth' });
-        updatePageNumber(1);
       }
     };
 
@@ -105,10 +103,6 @@ export default {
       } else if (event.deltaY < 0) {
         scrollUp();
       }
-    };
-
-    const updatePageNumber = (delta) => {
-      currentPage.value = Math.min(Math.max(1, currentPage.value + delta), totalPages.value);
     };
 
     const zoomIn = () => {
@@ -123,10 +117,11 @@ export default {
       zoomLevel.value = value === 'auto' ? 1 : parseInt(value) / 100;
     };
 
-    const handleScroll = () => {
-      if (bookContent.value && totalPages.value > 0) {
-        const scrollPercentage = bookContent.value.scrollTop / (bookContent.value.scrollHeight - bookContent.value.clientHeight);
-        currentPage.value = Math.max(1, Math.ceil(scrollPercentage * totalPages.value));
+    const changeFontSize = (value) => {
+      fontSize.value = parseInt(value);
+      // Apply font size to rendition if book is loaded
+      if (rendition.value && rendition.value.themes) {
+        rendition.value.themes.fontSize(`${fontSize.value}px`);
       }
     };
 
@@ -156,9 +151,18 @@ export default {
 
         await rendition.value.display();
 
-        rendition.value.themes.default({ 
-          p: { "font-size": "large" }
+        rendition.value.themes.fontSize(`${fontSize.value}px`);
+
+        // Track reading progress with percentage
+        rendition.value.on("relocated", (location) => {
+          if (book.value && book.value.locations) {
+            const percent = book.value.locations.percentageFromCfi(location.start.cfi);
+            currentPage.value = Math.floor(percent * 100);
+          }
         });
+
+        // Generate locations for percentage calculation
+        await book.value.locations.generate(1600);
         
         book.value.loaded.navigation.then(nav => {
           // Only sanitize table of contents labels
@@ -166,10 +170,6 @@ export default {
             ...item,
             label: sanitizeHTML(item.label)
           }));
-        });
-
-        book.value.loaded.spine.then(spine => {
-          totalPages.value = spine.items.length;
         });
 
         console.log('Book loaded successfully, book.value:', !!book.value);
@@ -321,6 +321,7 @@ export default {
       currentPage,
       totalPages,
       zoomLevel,
+      fontSize,
       bookContent,
       tableOfContents,
       toggleSidebar,
@@ -329,7 +330,7 @@ export default {
       zoomIn,
       zoomOut,
       changeZoom,
-      handleScroll,
+      changeFontSize,
       loadEpub,
       navigateToLocation,
       handleDragEnter,
