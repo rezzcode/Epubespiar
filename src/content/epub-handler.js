@@ -1,5 +1,5 @@
-// Use browser API directly instead of webextension-polyfill
-const browser = globalThis.browser || globalThis.chrome;
+import browser from 'webextension-polyfill';
+import { validateURL, sanitizeHTML } from '../utils/security';
 
 // Track drag events
 let isDraggingEpub = false;
@@ -13,51 +13,11 @@ function isValidEpubUrl(url) {
   try {
     const urlObj = new URL(url);
     return urlObj.pathname.toLowerCase().endsWith('.epub') &&
-           (urlObj.protocol === 'https:' || urlObj.protocol === 'http:' || urlObj.protocol === 'file:') &&
+           (urlObj.protocol === 'https:' || urlObj.protocol === 'file:') &&
            urlObj.pathname.length < 2048; // Prevent path traversal
   } catch {
     return false;
   }
-}
-
-// Get protocol type
-function getUrlProtocol(url) {
-  try {
-    return new URL(url).protocol;
-  } catch {
-    return null;
-  }
-}
-
-// Promisify sendMessage for Chrome compatibility
-function sendMessage(message) {
-  return new Promise((resolve, reject) => {
-    if (typeof browser.runtime.sendMessage === 'function') {
-      // Try to detect if sendMessage returns a Promise (Firefox)
-      let isPromiseApi = false;
-      try {
-        const maybePromise = browser.runtime.sendMessage(message);
-        if (maybePromise && typeof maybePromise.then === 'function') {
-          isPromiseApi = true;
-          maybePromise.then(resolve).catch(reject);
-        }
-      } catch (e) {
-        // Ignore, fallback to callback
-      }
-      if (!isPromiseApi) {
-        // Chrome uses callback
-        browser.runtime.sendMessage(message, (response) => {
-          if (browser.runtime.lastError) {
-            reject(browser.runtime.lastError);
-          } else {
-            resolve(response);
-          }
-        });
-      }
-    } else {
-      reject(new Error('browser.runtime.sendMessage is not available'));
-    }
-  });
 }
 
 // Listen for dragstart events
@@ -67,13 +27,12 @@ document.addEventListener('dragstart', async (event) => {
              
   if (url && isValidEpubUrl(url)) {
     try {
-      const response = await sendMessage({
+      const response = await browser.runtime.sendMessage({
         type: 'EPUB_DRAGSTART',
-        url: url,
-        protocol: getUrlProtocol(url)
+        url: url
       });
 
-      if (response && response.shouldHandle) {
+      if (response.shouldHandle) {
         isDraggingEpub = true;
         event.preventDefault();
       }
@@ -94,10 +53,9 @@ document.addEventListener('drop', async (event) => {
 
   if (isValidEpubUrl(url)) {
     try {
-      await sendMessage({
+      await browser.runtime.sendMessage({
         type: 'EPUB_DROP',
-        url: url,
-        protocol: getUrlProtocol(url)
+        url: url
       });
     } catch (error) {
       console.error('Error handling drop');

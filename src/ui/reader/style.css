@@ -11,6 +11,8 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  --sidebar-size: 240px;
   
   /* Light Mode Variables */
   --background-color: #d4d4d7;
