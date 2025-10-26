@@ -10,7 +10,7 @@
           </strong>
         </button>
         <div class="page-indicator">
-          <span>{{ currentPage }}% of {{ totalPages }}</span>
+          <span>{{ currentPage }} of {{ totalPages }}%</span>
         </div>
       </div>
       
