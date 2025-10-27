@@ -3,15 +3,15 @@ import { validateURL, secureStorageSet, secureStorageGet } from '../utils/securi
 
 // Rate limiting configuration
 const RATE_LIMIT = {
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100 // limit each IP to 100 requests per windowMs
+  windowMs: 15 * 60 * 1000,
+  max: 50
 };
 
 // Message rate limiting
 const messageRateLimit = new Map();
 
 // Track open reader tabs with their instance IDs
-const readerTabs = new Map(); // Changed from Set to Map to store instance IDs
+const readerTabs = new Map();
 
 // Function to generate random instance ID
 function generateInstanceId() {
@@ -93,19 +93,66 @@ browser.action.onClicked.addListener((tab) => {
 
 // Intercept downloads
 browser.downloads.onCreated.addListener(async (downloadItem) => {
-  if (isValidEpubUrl(downloadItem.url)) {
-    try {
-      // Cancel the download
+  try {
+    const urlObj = new URL(downloadItem.url);
+
+    // Handle local EPUBs dragged into new tab
+    if (urlObj.protocol === "file:" && isValidEpubUrl(downloadItem.url)) {
       await browser.downloads.cancel(downloadItem.id);
       await browser.downloads.erase({ id: downloadItem.id });
-      
-      // Open in reader instead
+      await openReaderTab(downloadItem.url);
+      return;
+    }
+
+    // Allow HTTPS EPUBs (for now)
+    if (urlObj.protocol === "https:" && isValidEpubUrl(downloadItem.url)) {
+      return;
+    }
+  } catch (error) {
+    console.error("Error processing download:", error);
+  }
+});
+
+// ==========================================
+// 🔮 FUTURE FEATURE: HTTPS EPUB Preview
+// I'll uncomment this section when ready to implement
+// ==========================================
+
+/*
+const allowedDownloads = new Set();
+
+browser.downloads.onCreated.addListener(async (downloadItem) => {
+  if (isValidEpubUrl(downloadItem.url)) {
+    if (allowedDownloads.has(downloadItem.url)) {
+      allowedDownloads.delete(downloadItem.url);
+      console.log("Allowing direct download for:", downloadItem.url);
+      return;
+    }
+
+    try {
+      await browser.downloads.cancel(downloadItem.id);
+      await browser.downloads.erase({ id: downloadItem.id });
       await openReaderTab(downloadItem.url);
     } catch (error) {
-      console.error('Error intercepting download');
+      console.error("Error intercepting HTTPS EPUB:", error);
+      allowedDownloads.add(downloadItem.url);
     }
   }
 });
+
+browser.runtime.onMessage.addListener((message) => {
+  if (message.type === "ALLOW_DOWNLOAD" && isValidEpubUrl(message.url)) {
+    allowedDownloads.add(message.url);
+    browser.downloads
+      .download({ url: message.url })
+      .then((id) => console.log("Manual download started:", id))
+      .catch((err) => {
+        console.error("Download failed:", err);
+        allowedDownloads.delete(message.url);
+      });
+  }
+});
+*/
 
 // Handle tab removal
 browser.tabs.onRemoved.addListener((tabId) => {
