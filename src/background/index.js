@@ -56,7 +56,7 @@ async function openReaderTab(epubUrl = null, isNewInstance = false) {
       throw new Error('Invalid EPUB file URL');
     }
 
-    const readerURL = browser.runtime.getURL("src/ui/reader/index.html");
+    const readerURL = browser.runtime.getURL("reader.html");
     const instanceId = generateInstanceId();
     const finalURL = epubUrl 
       ? `${readerURL}?file=${encodeURIComponent(epubUrl)}&instance=${instanceId}`
