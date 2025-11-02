@@ -164,7 +164,9 @@
       };
 
       const onFontSizeChange = (event) => {
-        emit('font-size-change', event.target.value);
+        // I don't know why, but initializing this before using it on emit works just fine
+        const newFontSize = event.target.value;
+        emit('font-size-change', newFontSize);
       };
   
       const triggerFileInput = () => {

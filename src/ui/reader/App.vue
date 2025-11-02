@@ -117,12 +117,42 @@ export default {
       zoomLevel.value = value === 'auto' ? 1 : parseInt(value) / 100;
     };
 
+    // Helper function to apply font size theme
+    const applyFontSizeTheme = () => {
+      if (!rendition.value || !rendition.value.themes) {
+        console.log('Rendition or themes not available for font size application');
+        return;
+      }
+
+      try {
+        const fontTheme = {
+          body: {
+            'font-size': `${fontSize.value}px !important`,
+            'line-height': '1.6 !important'
+          },
+          'p, div, span, h1, h2, h3, h4, h5, h6, li, td, th': {
+            'font-size': `${fontSize.value}px !important`
+          }
+        };
+        
+        // Register theme to overwrite existing registration
+        rendition.value.themes.register('userFontSize', fontTheme);
+        rendition.value.themes.select('userFontSize');
+        
+        // Resize the rendition to recalculate layout
+        nextTick(() => {
+          if (rendition.value) {
+            rendition.value.resize();
+          }
+        });
+      } catch (error) {
+        console.error('Error applying font size theme:', error);
+      }
+    };
+
     const changeFontSize = (value) => {
       fontSize.value = parseInt(value);
-      // Apply font size to rendition if book is loaded
-      if (rendition.value && rendition.value.themes) {
-        rendition.value.themes.fontSize(`${fontSize.value}px`);
-      }
+      applyFontSizeTheme();
     };
 
     const loadEpub = async (file) => {
@@ -151,7 +181,8 @@ export default {
 
         await rendition.value.display();
 
-        rendition.value.themes.fontSize(`${fontSize.value}px`);
+        // Apply initial font size theme after rendition is ready
+        applyFontSizeTheme();
 
         // Track reading progress with percentage
         rendition.value.on("relocated", (location) => {
@@ -159,6 +190,10 @@ export default {
             const percent = book.value.locations.percentageFromCfi(location.start.cfi);
             currentPage.value = Math.floor(percent * 100);
           }
+          // No need to reapply font size theme after navigation; it is only needed when the user changes font size
+          // nextTick(() => {
+          //   applyFontSizeTheme(); // removed for performance
+          // });
         });
 
         // Generate locations for percentage calculation
@@ -236,9 +271,9 @@ export default {
       // Swipe detection
       if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > MIN_SWIPE_DISTANCE) {
         if (deltaX > 0) {
-          scrollUp(); // Swipe right
+          scrollUp();
         } else {
-          scrollDown(); // Swipe left
+          scrollDown();
         }
       }
     };
@@ -258,7 +293,6 @@ export default {
       return loaded;
     });
 
-    // Add function to load book from URL
     const loadBookFromUrl = async () => {
       try {
         const params = new URLSearchParams(window.location.search);
@@ -282,7 +316,6 @@ export default {
     };
 
     const handleResize = () => {
-      // Resize rendition when window size changes
       if (rendition.value) {
         nextTick(() => {
           rendition.value.resize();
@@ -331,6 +364,7 @@ export default {
       zoomOut,
       changeZoom,
       changeFontSize,
+      applyFontSizeTheme,
       loadEpub,
       navigateToLocation,
       handleDragEnter,
