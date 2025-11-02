@@ -428,21 +428,21 @@ export default {
 /* Desktop: comfortable reading width */
 @media (min-width: 1024px) {
   #book-content {
-    padding: 40px 80px;
+    padding: 10px 80px;
   }
 }
 
 /* Tablet: medium padding */
 @media (min-width: 768px) and (max-width: 1023px) {
   #book-content {
-    padding: 30px 40px;
+    padding: 10px 40px;
   }
 }
 
 /* Mobile: minimal padding */
 @media (max-width: 767px) {
   #book-content {
-    padding: 15px;
+    padding: 10px;
   }
 }
 

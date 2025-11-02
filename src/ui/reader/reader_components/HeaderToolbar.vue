@@ -398,7 +398,7 @@
   @media (max-width: 480px) {
     .header-toolbar {
       padding: 2px 5px;
-      height: 32px;
+      height: 32px; /* here the header was reduced so it affects the sidebar */
     }
     
     .middle-toolbar select {

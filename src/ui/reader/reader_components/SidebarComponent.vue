@@ -124,6 +124,13 @@
       width: 320px;
     }
   }
+
+  /* Small screens: Match reduced toolbar header height (36px - 4px = 32px) */
+  @media (max-width: 480px) {
+    .sidebar {
+      top: 32px;
+    }
+  }
   
   @media (prefers-color-scheme: dark) {
     .sidebar {
