@@ -55,6 +55,7 @@ import useNotification from '../../composables/useNotification';
 import jszip from 'jszip';
 import ePub, { Rendition, Book as EpubBook } from 'epubjs';
 import { validateFile, sanitizeHTML } from '../../utils/security';
+import throttle from 'lodash.throttle';
 
 export default {
   components: {
@@ -73,11 +74,24 @@ export default {
     const tableOfContents = ref([]);
     const isDragging = ref(false);
     const fontSize = ref(16); // Font size in pixels (14-30 range)
+    const throttledUpdateProgress = ref(null); // Store throttled function for cleanup
+    const locationGenerationAbortController = ref(null); // AbortController for cancellation
 
     // Maximum file size (100MB)
     const MAX_FILE_SIZE = 100 * 1024 * 1024;
     const ALLOWED_TYPES = ['application/epub+zip'];
     const MIN_SWIPE_DISTANCE = 50; // Minimum pixels for swipe gesture
+    
+    // Performance tuning constants
+    const PROGRESS_UPDATE_THROTTLE_MS = 200; // Throttle delay for progress updates
+    const LOCATION_CHARS_PER_PAGE = 800; // Characters per virtual page for location generation (lower = more granular but slower)
+    const IDLE_CALLBACK_TIMEOUT_MS = 2000; // Timeout for idle callback
+    const LOCATION_GENERATION_FALLBACK_DELAY_MS = 300; // Fallback delay for location generation
+
+    // Helper function to check if locations are available
+    const hasLocationsGenerated = () => {
+      return book.value?.locations?.total > 0;
+    };
 
     const toggleSidebar = () => {
       sidebarOpen.value = !sidebarOpen.value;
@@ -164,6 +178,22 @@ export default {
         }
 
         const arrayBuffer = await file.arrayBuffer();
+        
+        // Clean up previous book and event listeners
+        if (throttledUpdateProgress.value) {
+          if (rendition.value) {
+            rendition.value.off('relocated', throttledUpdateProgress.value);
+          }
+          throttledUpdateProgress.value.cancel();
+          throttledUpdateProgress.value = null;
+        }
+        
+        // Cancel ongoing location generation
+        if (locationGenerationAbortController.value) {
+          locationGenerationAbortController.value.abort();
+          locationGenerationAbortController.value = null;
+        }
+        
         if (book.value) {
           book.value.destroy();
           book.value = null; // Explicitly set to null
@@ -181,23 +211,93 @@ export default {
 
         await rendition.value.display();
 
-        // Apply initial font size theme after rendition is ready
         applyFontSizeTheme();
 
-        // Track reading progress with percentage
-        rendition.value.on("relocated", (location) => {
-          if (book.value && book.value.locations) {
-            const percent = book.value.locations.percentageFromCfi(location.start.cfi);
-            currentPage.value = Math.floor(percent * 100);
+        // Improved progress handling with throttled updates
+        throttledUpdateProgress.value = throttle((location) => {
+          // Prefer accurate percentage if locations are available
+          try {
+            if (book.value?.locations?.percentageFromCfi && hasLocationsGenerated()) {
+              const percent = book.value.locations.percentageFromCfi(location.start.cfi);
+              currentPage.value = Math.floor(percent * 100);
+              return;
+            }
+          } catch (e) {
+            // Ignore: percentageFromCfi may fail for some EPUBs (e.g., no locations), or locations may be unavailable (see early return above); in both cases, fallback to spine-based progress calculation below.
           }
-          // No need to reapply font size theme after navigation; it is only needed when the user changes font size
-          // nextTick(() => {
-          //   applyFontSizeTheme(); // removed for performance
-          // });
-        });
 
-        // Generate locations for percentage calculation
-        await book.value.locations.generate(1600);
+          // Lightweight fallback: approximate progress by spine index
+          try {
+            const spineLen = book.value?.spine?.spineItems?.length || 1;
+            const spineIndex = location?.start?.index ?? 0;
+            currentPage.value = Math.floor((spineIndex / Math.max(spineLen, 1)) * 100);
+          } catch (e) {
+            // Ignore: Fallback progress calculation errors are non-critical (e.g., undefined spine structure, missing index) and do not affect the core reading experience.
+          }
+        }, PROGRESS_UPDATE_THROTTLE_MS, { leading: true, trailing: true });
+
+        rendition.value.on("relocated", throttledUpdateProgress.value);
+
+        // Generate locations in the background with coarser granularity
+        const hasGenerateMethod = book.value?.locations?.generate;
+        const needGenerate = hasGenerateMethod && !hasLocationsGenerated();
+        
+        if (needGenerate) {
+          // Create new AbortController for this generation
+          // Note: epub.js locations.generate() doesn't accept an AbortSignal parameter,
+          // but we can stop the internal processing queue when abort() is called.
+          locationGenerationAbortController.value = new AbortController();
+          const currentBook = book.value;
+          const abortSignal = locationGenerationAbortController.value.signal;
+          
+          const generateFn = () => {
+            // Guard: verify book is still valid and matches the expected book
+            if (!book.value || book.value !== currentBook || abortSignal.aborted) {
+              return;
+            }
+            
+            // Capture the current controller for race condition safety
+            const thisController = locationGenerationAbortController.value;
+            // Capture the locations object for this specific generation. We intentionally capture
+            // it here (not inside the abort listener) to ensure we stop the queue for THIS generation,
+            // not a potentially new book's generation if the book changes between now and abort.
+            const locationsObj = book.value.locations;
+            
+            // Set up abort listener to stop the queue processing when cancellation is requested.
+            // This stops processing new sections but cannot interrupt a section currently being parsed.
+            // The queue.stop() method clears pending sections and prevents new sections from being processed.
+            // Note: This accesses epub.js internal implementation (locationsObj.q). While not ideal,
+            // this is the only way to cancel generation since the public API doesn't support cancellation.
+            // The try-catch ensures graceful handling if the internal structure changes in future epub.js versions.
+            abortSignal.addEventListener('abort', () => {
+              try {
+                if (locationsObj?.q?.stop) {
+                  locationsObj.q.stop();
+                }
+              } catch (err) {
+                // Silently ignore errors from stopping the queue, as cancellation is best-effort
+                console.debug('Unable to stop location generation queue:', err);
+              }
+            }, { once: true });
+            
+            book.value.locations.generate(LOCATION_CHARS_PER_PAGE).catch(err => {
+              if (!abortSignal.aborted) {
+                console.warn('locations.generate failed:', err);
+              }
+            }).finally(() => {
+              // Only clear the controller if it is still the one we started with
+              if (locationGenerationAbortController.value === thisController) {
+                locationGenerationAbortController.value = null;
+              }
+            });
+          };
+
+          if ('requestIdleCallback' in window) {
+            requestIdleCallback(generateFn, { timeout: IDLE_CALLBACK_TIMEOUT_MS });
+          } else {
+            setTimeout(generateFn, LOCATION_GENERATION_FALLBACK_DELAY_MS);
+          }
+        }
         
         book.value.loaded.navigation.then(nav => {
           // Only sanitize table of contents labels
@@ -342,6 +442,19 @@ export default {
         bookContent.value.removeEventListener("wheel", handleMouseScroll);
         bookContent.value.removeEventListener('touchstart', handleTouchStart, { passive: true });
         bookContent.value.removeEventListener('touchend', handleTouchEnd, { passive: true });
+      }
+      // Clean up throttled function
+      if (throttledUpdateProgress.value) {
+        if (rendition.value) {
+          rendition.value.off('relocated', throttledUpdateProgress.value);
+        }
+        throttledUpdateProgress.value.cancel();
+        throttledUpdateProgress.value = null;
+      }
+      // Cancel location generation
+      if (locationGenerationAbortController.value) {
+        locationGenerationAbortController.value.abort();
+        locationGenerationAbortController.value = null;
       }
       // Clean up book resources
       if (book.value) {
