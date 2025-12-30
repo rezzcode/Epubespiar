@@ -125,9 +125,10 @@ When detected, it redirects to the extensions reader page, where you can read th
 
 ## What's not Implemented
 
-- [] Epub book library
-- [] Progress Tracking
-- [] Url intercepts
-- [] What you thought was but is not while using the extension
+- [ ] Epub book library
+- [ ] Progress Tracking
+- [ ] Url intercepts
+- [ ] What you thought was but is not while using the extension
+
 
 
