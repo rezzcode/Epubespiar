@@ -1,5 +1,17 @@
 <template>
+  <!-- Loading Page - shown when loading a book -->
+  <loading-page 
+    v-if="isLoadingBook"
+    :title="loadingTitle"
+    :message="loadingMessage"
+    :subtitle="loadingSubtitle"
+    :showProgress="showLoadingProgress"
+    :progress="loadingProgress"
+  />
+  
+  <!-- Main Reader View - shown when not loading -->
   <div 
+    v-else
     class="epub-reader"
     @dragover.prevent="handleDragEnter"
     @dragenter.prevent="handleDragEnter"
@@ -13,6 +25,7 @@
       :totalPages="totalPages"
       :isBookLoaded="isBookLoaded"
       :fontSize="fontSize"
+      :zoomLevel="zoomLevel"
       @toggle-sidebar="toggleSidebar"
       @scroll-up="scrollUp"
       @scroll-down="scrollDown"
@@ -22,6 +35,8 @@
       @font-size-change="changeFontSize"
       @file-selected="loadEpub"
       @toggle-fullscreen="toggleFullscreen"
+      @toggle-settings="toggleSettings"
+      @toggle-bookshelf="toggleBookshelf"
     />
     
     <div class="main-content">
@@ -32,17 +47,51 @@
         @click="toggleSidebar"
       ></div>
       
+      <!-- Bookshelf sidebar overlay -->
+      <div 
+        v-if="bookshelfOpen" 
+        class="bookshelf-backdrop"
+        @click="toggleBookshelf"
+      ></div>
+      
       <sidebar-component 
         :isOpen="sidebarOpen" 
         :toc="tableOfContents"
+        :currentChapter="currentChapter"
         @navigate="navigateToLocation"
       />
       
-      <div 
-        id="book-content" 
-        ref="bookContent" 
-        :style="{ transform: `scale(${zoomLevel})` }"
-      ></div>
+      <bookshelf-sidebar
+        :isOpen="bookshelfOpen"
+        :books="recentBooks"
+        :isBookLoaded="isBookLoaded"
+        @close="toggleBookshelf"
+        @book-select="loadBookFromShelf"
+        @file-upload="handleFileUpload"
+        @book-deleted="handleBookDeleted"
+      />
+      
+      <epub-renderer 
+        ref="bookContent"
+        :isLoading="false"
+        :isBookLoaded="isBookLoaded"
+        :zoomLevel="zoomLevel"
+        :chapters="chapters"
+        :sidebarOffset="sidebarOffset"
+      />
+      
+      <reader-settings
+        :open="settingsOpen"
+        @close="toggleSettings"
+        :fontSize="fontSize"
+        :zoom="zoomPercentage"
+        :fontWeight="fontWeight"
+        :fontFamily="fontFamily"
+        @font-size-change="changeFontSize"
+        @zoom-change="changeZoomFromSettings"
+        @font-weight-change="changeFontWeight"
+        @font-family-change="changeFontFamily"
+      />
     </div>
   </div>
 </template>
@@ -51,6 +100,7 @@
 import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue';
 import HeaderToolbar from './reader_components/HeaderToolbar.vue';
 import SidebarComponent from './reader_components/SidebarComponent.vue';
+import EpubRenderer from './reader_components/EpubRenderer.vue';
 import useNotification from '../../composables/useNotification';
 import jszip from 'jszip';
 import ePub, { Rendition, Book as EpubBook } from 'epubjs';
@@ -60,7 +110,8 @@ import throttle from 'lodash.throttle';
 export default {
   components: {
     HeaderToolbar,
-    SidebarComponent
+    SidebarComponent,
+    EpubRenderer
   },
   setup(props, { emit }) {
     const { addNotification } = useNotification();
@@ -74,6 +125,7 @@ export default {
     const tableOfContents = ref([]);
     const isDragging = ref(false);
     const fontSize = ref(16); // Font size in pixels (14-30 range)
+    const currentChapter = ref(null); // Track current chapter/section
     const throttledUpdateProgress = ref(null); // Store throttled function for cleanup
     const locationGenerationAbortController = ref(null); // AbortController for cancellation
 
@@ -215,6 +267,11 @@ export default {
 
         // Improved progress handling with throttled updates
         throttledUpdateProgress.value = throttle((location) => {
+          // Track current chapter from location
+          if (location.start.href) {
+            currentChapter.value = location.start.href;
+          }
+          
           // Prefer accurate percentage if locations are available
           try {
             if (book.value?.locations?.percentageFromCfi && hasLocationsGenerated()) {
@@ -223,7 +280,7 @@ export default {
               return;
             }
           } catch (e) {
-            // Ignore: percentageFromCfi may fail for some EPUBs (e.g., no locations), or locations may be unavailable (see early return above); in both cases, fallback to spine-based progress calculation below.
+            // Ignore: Fall back to spine-based calculation if percentageFromCfi fails
           }
 
           // Lightweight fallback: approximate progress by spine index
@@ -232,7 +289,7 @@ export default {
             const spineIndex = location?.start?.index ?? 0;
             currentPage.value = Math.floor((spineIndex / Math.max(spineLen, 1)) * 100);
           } catch (e) {
-            // Ignore: Fallback progress calculation errors are non-critical (e.g., undefined spine structure, missing index) and do not affect the core reading experience.
+            // Ignore: Fallback calculation errors are non-critical
           }
         }, PROGRESS_UPDATE_THROTTLE_MS, { leading: true, trailing: true });
 
@@ -243,9 +300,6 @@ export default {
         const needGenerate = hasGenerateMethod && !hasLocationsGenerated();
         
         if (needGenerate) {
-          // Create new AbortController for this generation
-          // Note: epub.js locations.generate() doesn't accept an AbortSignal parameter,
-          // but we can stop the internal processing queue when abort() is called.
           locationGenerationAbortController.value = new AbortController();
           const currentBook = book.value;
           const abortSignal = locationGenerationAbortController.value.signal;
@@ -256,19 +310,9 @@ export default {
               return;
             }
             
-            // Capture the current controller for race condition safety
             const thisController = locationGenerationAbortController.value;
-            // Capture the locations object for this specific generation. We intentionally capture
-            // it here (not inside the abort listener) to ensure we stop the queue for THIS generation,
-            // not a potentially new book's generation if the book changes between now and abort.
             const locationsObj = book.value.locations;
             
-            // Set up abort listener to stop the queue processing when cancellation is requested.
-            // This stops processing new sections but cannot interrupt a section currently being parsed.
-            // The queue.stop() method clears pending sections and prevents new sections from being processed.
-            // Note: This accesses epub.js internal implementation (locationsObj.q). While not ideal,
-            // this is the only way to cancel generation since the public API doesn't support cancellation.
-            // The try-catch ensures graceful handling if the internal structure changes in future epub.js versions.
             abortSignal.addEventListener('abort', () => {
               try {
                 if (locationsObj?.q?.stop) {
@@ -276,7 +320,6 @@ export default {
                 }
               } catch (err) {
                 // Silently ignore errors from stopping the queue, as cancellation is best-effort
-                console.debug('Unable to stop location generation queue:', err);
               }
             }, { once: true });
             
@@ -371,9 +414,9 @@ export default {
       // Swipe detection
       if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > MIN_SWIPE_DISTANCE) {
         if (deltaX > 0) {
-          scrollUp();
+          scrollUp(); // Swipe right
         } else {
-          scrollDown();
+          scrollDown(); // Swipe left
         }
       }
     };
@@ -393,6 +436,7 @@ export default {
       return loaded;
     });
 
+    // Add function to load book from URL
     const loadBookFromUrl = async () => {
       try {
         const params = new URLSearchParams(window.location.search);
@@ -416,6 +460,7 @@ export default {
     };
 
     const handleResize = () => {
+      // Resize rendition when window size changes
       if (rendition.value) {
         nextTick(() => {
           rendition.value.resize();
@@ -426,11 +471,18 @@ export default {
     onMounted(() => {
       document.addEventListener('keyup', handleKeyUp);
       window.addEventListener('resize', handleResize);
-      if (bookContent.value) {
-        bookContent.value.addEventListener("wheel", handleMouseScroll);
-        bookContent.value.addEventListener('touchstart', handleTouchStart, { passive: true });
-        bookContent.value.addEventListener('touchend', handleTouchEnd, { passive: true });
-      }
+      
+      // Access the book-content element from the EpubRenderer component
+      nextTick(() => {
+        const bookContentElement = bookContent.value?.$refs?.bookContent || 
+                                   bookContent.value?.$el?.querySelector('#book-content');
+        if (bookContentElement) {
+          bookContentElement.addEventListener("wheel", handleMouseScroll);
+          bookContentElement.addEventListener('touchstart', handleTouchStart, { passive: true });
+          bookContentElement.addEventListener('touchend', handleTouchEnd, { passive: true });
+        }
+      });
+      
       // Load book from URL if present
       loadBookFromUrl();
     });
@@ -438,11 +490,16 @@ export default {
     onUnmounted(() => {
       document.removeEventListener('keyup', handleKeyUp);
       window.removeEventListener('resize', handleResize);
-      if (bookContent.value) {
-        bookContent.value.removeEventListener("wheel", handleMouseScroll);
-        bookContent.value.removeEventListener('touchstart', handleTouchStart, { passive: true });
-        bookContent.value.removeEventListener('touchend', handleTouchEnd, { passive: true });
+      
+      // Access the book-content element from the EpubRenderer component
+      const bookContentElement = bookContent.value?.$refs?.bookContent || 
+                                 bookContent.value?.$el?.querySelector('#book-content');
+      if (bookContentElement) {
+        bookContentElement.removeEventListener("wheel", handleMouseScroll);
+        bookContentElement.removeEventListener('touchstart', handleTouchStart);
+        bookContentElement.removeEventListener('touchend', handleTouchEnd);
       }
+      
       // Clean up throttled function
       if (throttledUpdateProgress.value) {
         if (rendition.value) {
@@ -470,6 +527,7 @@ export default {
       fontSize,
       bookContent,
       tableOfContents,
+      currentChapter,
       toggleSidebar,
       scrollUp,
       scrollDown,
@@ -523,46 +581,6 @@ export default {
   }
   to {
     opacity: 1;
-  }
-}
-
-#book-content {
-  flex: 1;
-  overflow-y: auto;
-  padding: 20px;
-  transition: transform 0.3s ease;
-  background-color: var(--background-color);
-  height: 100vh;
-  max-width: 1200px;
-  margin: 0 auto;
-  width: 100%;
-}
-
-/* Desktop: comfortable reading width */
-@media (min-width: 1024px) {
-  #book-content {
-    padding: 10px 80px;
-  }
-}
-
-/* Tablet: medium padding */
-@media (min-width: 768px) and (max-width: 1023px) {
-  #book-content {
-    padding: 10px 40px;
-  }
-}
-
-/* Mobile: minimal padding */
-@media (max-width: 767px) {
-  #book-content {
-    padding: 10px;
-  }
-}
-
-@media (prefers-color-scheme: dark) {
-  #book-content {
-    background-color: var(--background-color);
-    color: var(--text-color);
   }
 }
 
