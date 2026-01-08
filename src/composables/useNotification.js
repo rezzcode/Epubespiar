@@ -1,9 +1,9 @@
-import { ref, onUnmounted } from 'vue'
+import { ref } from 'vue'
 
 const notifications = ref([])
 const timeouts = new Map()
 
-const useNotification = (() => {
+const useNotification = () => {
   const addNotification = ({ message, type = 'info', timeout = 5000 }) => {
     const id = crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`
     notifications.value.push({ id, message, type })
@@ -26,16 +26,18 @@ const useNotification = (() => {
     }
   }
 
-  onUnmounted(() => {
+  // Cleanup function that can be called manually if needed
+  const cleanup = () => {
     timeouts.forEach(clearTimeout)
     timeouts.clear()
-  })
+  }
 
-  return () => ({
+  return {
     notifications,
     addNotification,
-    removeNotification
-  })
-})()
+    removeNotification,
+    cleanup
+  }
+}
 
 export default useNotification

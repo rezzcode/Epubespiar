@@ -82,6 +82,19 @@
         </div>
       </div>
       
+      <!-- Download Intercept Toggle -->
+      <div class="download-intercept-container" title="Intercept EPUB downloads">
+        <label class="toggle-switch">
+          <input 
+            type="checkbox" 
+            v-model="interceptDownloads"
+            @change="onInterceptToggle"
+          />
+          <span class="toggle-slider"></span>
+        </label>
+        <span class="toggle-label">Auto-open EPUBs</span>
+      </div>
+      
       <!--div class="settings-container">
         <button @click="toggleSettings" title="Settings">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-gear" viewBox="0 0 16 16">
@@ -123,6 +136,7 @@
   
 <script>
 import { ref, onMounted, onBeforeUnmount, watch, computed } from 'vue';
+import { useBrowserLocalStorage } from '../../../composables/useBrowserStorage';
 
 export default {
   props: {
@@ -150,6 +164,9 @@ export default {
     const searchQuery = ref('');
     const searchResults = ref([]);
     const searchInput = ref(null);
+    
+    // Download intercept toggle state (default: false)
+    const { data: interceptDownloads } = useBrowserLocalStorage('interceptDownloads', false);
 
     // Reflect current zoom in dropdown using nearest preset value
     const zoomSelectValue = computed(() => {
@@ -198,6 +215,11 @@ export default {
     const toggleFullscreen = () => {
       emit('toggle-fullscreen');
     };
+    
+    const onInterceptToggle = () => {
+      // The value is already updated by v-model
+      // Storage is automatically synced via useBrowserLocalStorage
+    };
 
     const emitAndClose = (event) => {
       emit(event);
@@ -239,9 +261,9 @@ export default {
 
     return {
       settingsOpen, fileInput, searchOpen, searchQuery, searchResults, searchInput,
-      zoomSelectValue,
+      zoomSelectValue, interceptDownloads,
       toggleSettings, onZoomChange, onFontSizeChange, triggerFileInput, onFileSelected, 
-      emitAndClose, toggleSearch, toggleFullscreen, performSearch, goToSearchResult
+      emitAndClose, toggleSearch, toggleFullscreen, onInterceptToggle, performSearch, goToSearchResult
     };
   }
 };
@@ -528,5 +550,94 @@ export default {
   .search-result-item {
     padding: 8px 10px;
     cursor: pointer;
+  }
+
+  /* Download Intercept Toggle Styles */
+  .download-intercept-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: 12px;
+  }
+
+  .toggle-label {
+    font-size: 13px;
+    color: var(--text-color, #333);
+    white-space: nowrap;
+  }
+
+  .toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 44px;
+    height: 24px;
+  }
+
+  .toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  .toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: 0.3s;
+    border-radius: 24px;
+  }
+
+  .toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 18px;
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: 0.3s;
+    border-radius: 50%;
+  }
+
+  .toggle-switch input:checked + .toggle-slider {
+    background-color: #2196F3;
+  }
+
+  .toggle-switch input:checked + .toggle-slider:before {
+    transform: translateX(20px);
+  }
+
+  .toggle-switch input:focus + .toggle-slider {
+    box-shadow: 0 0 1px #2196F3;
+  }
+
+  /* Responsive behavior for toggle */
+  @media (max-width: 768px) {
+    .download-intercept-container {
+      margin-left: 6px;
+      gap: 4px;
+    }
+    
+    .toggle-label {
+      display: none;
+    }
+    
+    .toggle-switch {
+      width: 38px;
+      height: 20px;
+    }
+    
+    .toggle-slider:before {
+      height: 14px;
+      width: 14px;
+    }
+    
+    .toggle-switch input:checked + .toggle-slider:before {
+      transform: translateX(18px);
+    }
   }
 </style>

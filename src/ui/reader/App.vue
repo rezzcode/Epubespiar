@@ -444,10 +444,12 @@ export default {
         
         if (fileParam) {
           const url = decodeURIComponent(fileParam);
-          if (url.startsWith('file://') || url.startsWith('epub://')) {
+          if (url.startsWith('file://') || url.startsWith('epub://') || url.startsWith('https://')) {
             const response = await fetch(url);
             const blob = await response.blob();
-            await loadEpub(blob);
+            // Ensure the blob has the correct MIME type for EPUB validation
+            const epubBlob = new Blob([blob], { type: 'application/epub+zip' });
+            await loadEpub(epubBlob);
           }
         }
       } catch (error) {

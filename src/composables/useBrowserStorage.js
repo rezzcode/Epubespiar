@@ -1,4 +1,5 @@
-// import { ref, watch, nextTick } from "vue"
+import { ref, watch, nextTick, toRaw } from "vue";
+
 function mergeDeep(defaults, source) {
 	// Merge the default options with the stored options
 	const output = { ...defaults }; // Start with defaults
@@ -45,6 +46,56 @@ function useBrowserStorage(key, defaultValue, storageType = "sync") {
 	// Blocking setting storage if it is updating from storage
 	let isUpdatingFromStorage = true;
 	const defaultIsObject = isObject(defaultValue);
+	
+	// Check if chrome extension API is available (not available in dev mode)
+	const isExtensionContext = typeof chrome !== 'undefined' && chrome.storage;
+	
+	if (!isExtensionContext) {
+		// Fallback for dev mode: use localStorage
+		const storageKey = `${storageType}_${key}`;
+		
+		// Initialize from localStorage
+		const promise = new Promise((resolve) => {
+			try {
+				const stored = localStorage.getItem(storageKey);
+				if (stored !== null) {
+					const parsed = JSON.parse(stored);
+					if (defaultIsObject && isObject(parsed)) {
+						data.value = mergeDeep(defaultValue, parsed);
+					} else if (checkType(defaultValue, parsed)) {
+						data.value = parsed;
+					}
+				}
+			} catch (e) {
+				console.warn(`Failed to load ${key} from localStorage:`, e);
+			}
+			isUpdatingFromStorage = false;
+			resolve(true);
+		});
+		
+		// Watch for changes and update localStorage
+		watch(
+			data,
+			(newValue) => {
+				if (!isUpdatingFromStorage) {
+					if (checkType(defaultValue, newValue)) {
+						try {
+							localStorage.setItem(storageKey, JSON.stringify(toRaw(newValue)));
+						} catch (e) {
+							console.error(`Failed to save ${key} to localStorage:`, e);
+						}
+					} else {
+						console.error("not updating " + key + ": type mismatch");
+					}
+				}
+			},
+			{ deep: true, flush: "post" },
+		);
+		
+		return { data, promise };
+	}
+	
+	// Original chrome.storage implementation
 	// Initialize storage with the value from chrome.storage
 	const promise = new Promise((resolve) => {
 		chrome.storage[storageType].get(key, async (result) => {

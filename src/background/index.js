@@ -91,12 +91,15 @@ browser.action.onClicked.addListener((tab) => {
   });
 });
 
-// Intercept downloads
+// Track allowed downloads when user chooses to download instead of preview
+const allowedDownloads = new Set();
+
+// Intercept downloads with toggle support
 browser.downloads.onCreated.addListener(async (downloadItem) => {
   try {
     const urlObj = new URL(downloadItem.url);
 
-    // Handle local EPUBs dragged into new tab
+    // Always handle local EPUBs dragged into new tab (not affected by toggle)
     if (urlObj.protocol === "file:" && isValidEpubUrl(downloadItem.url)) {
       await browser.downloads.cancel(downloadItem.id);
       await browser.downloads.erase({ id: downloadItem.id });
@@ -104,55 +107,29 @@ browser.downloads.onCreated.addListener(async (downloadItem) => {
       return;
     }
 
-    // Allow HTTPS EPUBs (for now)
+    // Handle HTTPS EPUBs based on toggle setting
     if (urlObj.protocol === "https:" && isValidEpubUrl(downloadItem.url)) {
-      return;
+      // Check if this download was explicitly allowed
+      if (allowedDownloads.has(downloadItem.url)) {
+        allowedDownloads.delete(downloadItem.url);
+        return;
+      }
+
+      // Check if intercept is enabled in storage
+      const result = await browser.storage.local.get('interceptDownloads');
+      const interceptEnabled = result.interceptDownloads === true;
+      
+      if (interceptEnabled) {
+        await browser.downloads.cancel(downloadItem.id);
+        await browser.downloads.erase({ id: downloadItem.id });
+        await openReaderTab(downloadItem.url);
+      }
+      // If not enabled, allow normal download
     }
   } catch (error) {
     console.error("Error processing download:", error);
   }
 });
-
-// ==========================================
-// 🔮 FUTURE FEATURE: HTTPS EPUB Preview
-// I'll uncomment this section when ready to implement
-// ==========================================
-
-/*
-const allowedDownloads = new Set();
-
-browser.downloads.onCreated.addListener(async (downloadItem) => {
-  if (isValidEpubUrl(downloadItem.url)) {
-    if (allowedDownloads.has(downloadItem.url)) {
-      allowedDownloads.delete(downloadItem.url);
-      console.log("Allowing direct download for:", downloadItem.url);
-      return;
-    }
-
-    try {
-      await browser.downloads.cancel(downloadItem.id);
-      await browser.downloads.erase({ id: downloadItem.id });
-      await openReaderTab(downloadItem.url);
-    } catch (error) {
-      console.error("Error intercepting HTTPS EPUB:", error);
-      allowedDownloads.add(downloadItem.url);
-    }
-  }
-});
-
-browser.runtime.onMessage.addListener((message) => {
-  if (message.type === "ALLOW_DOWNLOAD" && isValidEpubUrl(message.url)) {
-    allowedDownloads.add(message.url);
-    browser.downloads
-      .download({ url: message.url })
-      .then((id) => console.log("Manual download started:", id))
-      .catch((err) => {
-        console.error("Download failed:", err);
-        allowedDownloads.delete(message.url);
-      });
-  }
-});
-*/
 
 // Handle tab removal
 browser.tabs.onRemoved.addListener((tabId) => {
@@ -190,6 +167,19 @@ browser.runtime.onMessage.addListener((message, sender) => {
       } else {
         reject(new Error('Invalid EPUB URL'));
       }
+    } else if (message.type === 'ALLOW_DOWNLOAD' && isValidEpubUrl(message.url)) {
+      // Allow manual download of EPUB
+      allowedDownloads.add(message.url);
+      browser.downloads
+        .download({ url: message.url })
+        .then((id) => {
+          resolve({ success: true, downloadId: id });
+        })
+        .catch((err) => {
+          console.error("Download failed:", err);
+          allowedDownloads.delete(message.url);
+          reject(new Error('Download failed: ' + err.message));
+        });
     } else {
       resolve({ success: false, error: 'Invalid message type' });
     }
