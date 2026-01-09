@@ -74,6 +74,32 @@ export function validateURL(url) {
 }
 
 /**
+ * Sanitize filename to prevent path traversal and XSS
+ * @param {string} filename - Filename to sanitize
+ * @returns {string} Sanitized filename
+ */
+export function sanitizeFilename(filename) {
+  if (!filename) return 'book.epub';
+  
+  // Remove any path separators and dangerous characters
+  let sanitized = filename
+    .replace(/[/\\]/g, '') // Remove path separators
+    .replace(/\.\./g, '') // Remove parent directory references
+    .replace(/[<>:"|?*\x00-\x1F]/g, '') // Remove special characters and control characters
+    .trim();
+  
+  // If empty after sanitization, use default
+  if (!sanitized) return 'book.epub';
+  
+  // Ensure it's a reasonable length (max 255 chars)
+  if (sanitized.length > 255) {
+    sanitized = sanitized.substring(0, 255);
+  }
+  
+  return sanitized;
+}
+
+/**
  * Simple encryption function (replace with proper encryption in production)
  * @param {any} data - Data to encrypt
  * @returns {Promise<string>} Encrypted data

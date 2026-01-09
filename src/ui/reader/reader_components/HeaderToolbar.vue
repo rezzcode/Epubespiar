@@ -74,6 +74,12 @@
         
         <!-- Show these buttons only when a book is loaded -->
         <div v-if="isBookLoaded" class="book-controls">
+          <button v-if="showDownloadButton" @click="handleDownload" title="Download EPUB" aria-label="Download EPUB file">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+              <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5"/>
+              <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708z"/>
+            </svg>
+          </button>
           <button @click="toggleFullscreen" title="Enter full Screen">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrows-angle-expand" viewBox="0 0 16 16">
               <path fill-rule="evenodd" d="M5.828 10.172a.5.5 0 0 0-.707 0l-4.096 4.096V11.5a.5.5 0 0 0-1 0v3.975a.5.5 0 0 0 .5.5H4.5a.5.5 0 0 0 0-1H1.732l4.096-4.096a.5.5 0 0 0 0-.707m4.344-4.344a.5.5 0 0 0 .707 0l4.096-4.096V4.5a.5.5 0 1 0 1 0V.525a.5.5 0 0 0-.5-.5H11.5a.5.5 0 0 0 0 1h2.768l-4.096 4.096a.5.5 0 0 0 0 .707"/>
@@ -144,7 +150,8 @@ export default {
     totalPages: { type: Number, default: 0 },
     isBookLoaded: { type: Boolean, default: false },
     fontSize: { type: Number, default: 16 },
-    zoomLevel: { type: Number, default: 1 }
+    zoomLevel: { type: Number, default: 1 },
+    epubUrl: { type: String, default: null }
   },
   emits: [
     'toggle-sidebar', 
@@ -155,7 +162,8 @@ export default {
     'go-to-first', 'go-to-last', 
     'set-vertical-scroll', 'set-horizontal-scroll',
     'toggle-search',
-    'toggle-fullscreen'
+    'toggle-fullscreen',
+    'download-epub'
   ],
   setup(props, { emit }) {
     const settingsOpen = ref(false);
@@ -167,6 +175,11 @@ export default {
     
     // Download intercept toggle state (default: false)
     const { data: interceptDownloads } = useBrowserLocalStorage('interceptDownloads', false);
+
+    // Check if download button should be shown (book loaded from HTTPS)
+    const showDownloadButton = computed(() => {
+      return props.isBookLoaded && props.epubUrl && props.epubUrl.startsWith('https://');
+    });
 
     // Reflect current zoom in dropdown using nearest preset value
     const zoomSelectValue = computed(() => {
@@ -216,6 +229,10 @@ export default {
       emit('toggle-fullscreen');
     };
     
+    const handleDownload = () => {
+      emit('download-epub');
+    };
+    
     const onInterceptToggle = () => {
       // The value is already updated by v-model
       // Storage is automatically synced via useBrowserLocalStorage
@@ -261,9 +278,9 @@ export default {
 
     return {
       settingsOpen, fileInput, searchOpen, searchQuery, searchResults, searchInput,
-      zoomSelectValue, interceptDownloads,
+      zoomSelectValue, interceptDownloads, showDownloadButton,
       toggleSettings, onZoomChange, onFontSizeChange, triggerFileInput, onFileSelected, 
-      emitAndClose, toggleSearch, toggleFullscreen, onInterceptToggle, performSearch, goToSearchResult
+      emitAndClose, toggleSearch, toggleFullscreen, handleDownload, onInterceptToggle, performSearch, goToSearchResult
     };
   }
 };
@@ -604,7 +621,7 @@ export default {
   }
 
   .toggle-switch input:checked + .toggle-slider {
-    background-color: #2196F3;
+    background-color: #10b981;
   }
 
   .toggle-switch input:checked + .toggle-slider:before {
@@ -612,7 +629,7 @@ export default {
   }
 
   .toggle-switch input:focus + .toggle-slider {
-    box-shadow: 0 0 1px #2196F3;
+    box-shadow: 0 0 1px #10b981;
   }
 
   /* Responsive behavior for toggle */

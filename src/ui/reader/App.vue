@@ -26,6 +26,7 @@
       :isBookLoaded="isBookLoaded"
       :fontSize="fontSize"
       :zoomLevel="zoomLevel"
+      :epubUrl="currentEpubUrl"
       @toggle-sidebar="toggleSidebar"
       @scroll-up="scrollUp"
       @scroll-down="scrollDown"
@@ -37,6 +38,7 @@
       @toggle-fullscreen="toggleFullscreen"
       @toggle-settings="toggleSettings"
       @toggle-bookshelf="toggleBookshelf"
+      @download-epub="downloadEpub"
     />
     
     <div class="main-content">
@@ -101,17 +103,19 @@ import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue';
 import HeaderToolbar from './reader_components/HeaderToolbar.vue';
 import SidebarComponent from './reader_components/SidebarComponent.vue';
 import EpubRenderer from './reader_components/EpubRenderer.vue';
+import LoadingPage from './reader_components/LoadingPage.vue';
 import useNotification from '../../composables/useNotification';
 import jszip from 'jszip';
 import ePub, { Rendition, Book as EpubBook } from 'epubjs';
-import { validateFile, sanitizeHTML } from '../../utils/security';
+import { validateFile, sanitizeHTML, validateURL, sanitizeFilename } from '../../utils/security';
 import throttle from 'lodash.throttle';
 
 export default {
   components: {
     HeaderToolbar,
     SidebarComponent,
-    EpubRenderer
+    EpubRenderer,
+    LoadingPage
   },
   setup(props, { emit }) {
     const { addNotification } = useNotification();
@@ -128,6 +132,15 @@ export default {
     const currentChapter = ref(null); // Track current chapter/section
     const throttledUpdateProgress = ref(null); // Store throttled function for cleanup
     const locationGenerationAbortController = ref(null); // AbortController for cancellation
+    const currentEpubUrl = ref(null); // Track the current EPUB URL (for HTTPS downloads)
+    
+    // Loading state variables
+    const isLoadingBook = ref(false);
+    const loadingTitle = ref('Loading Book');
+    const loadingMessage = ref('Please wait while we prepare your book...');
+    const loadingSubtitle = ref('This may take a moment');
+    const showLoadingProgress = ref(false);
+    const loadingProgress = ref(0);
 
     // Maximum file size (100MB)
     const MAX_FILE_SIZE = 100 * 1024 * 1024;
@@ -221,14 +234,27 @@ export default {
       applyFontSizeTheme();
     };
 
-    const loadEpub = async (file) => {
+    const loadEpub = async (file, preserveUrl = false) => {
       if (!file) return;
+      
+      // Set loading state
+      isLoadingBook.value = true;
+      loadingTitle.value = 'Loading Book';
+      loadingMessage.value = 'Preparing your EPUB file...';
+      loadingSubtitle.value = 'This may take a moment';
+      
       try {
+        // Clear the current EPUB URL when loading from file (not from URL)
+        if (!preserveUrl) {
+          currentEpubUrl.value = null;
+        }
+        
         // Validate file
         if (!validateFile(file, MAX_FILE_SIZE, ALLOWED_TYPES)) {
           throw new Error('Invalid file type or size');
         }
 
+        loadingMessage.value = 'Processing EPUB file...';
         const arrayBuffer = await file.arrayBuffer();
         
         // Clean up previous book and event listeners
@@ -251,8 +277,15 @@ export default {
           book.value = null; // Explicitly set to null
         }
         
+        loadingMessage.value = 'Initializing book...';
         book.value = ePub(arrayBuffer);
         await book.value.ready;
+        
+        // Hide loading screen before rendering so book-content element exists in DOM
+        isLoadingBook.value = false;
+        
+        // Wait for DOM to update before rendering
+        await nextTick();
         
         rendition.value = book.value.renderTo("book-content", {
           manager: "continuous",
@@ -356,6 +389,9 @@ export default {
         console.error('Failed to load book:', err);
         book.value = null; // Ensure book is set to null on error
         addNotification({ message: 'Failed to load book. Please check the file format and size.', type: 'error' });
+        
+        // Clear loading state on error
+        isLoadingBook.value = false;
       }
     };
 
@@ -444,18 +480,92 @@ export default {
         
         if (fileParam) {
           const url = decodeURIComponent(fileParam);
+          
+          // Set loading state immediately before fetching
+          isLoadingBook.value = true;
+          loadingTitle.value = 'Loading Book';
+          loadingMessage.value = 'Fetching EPUB file from URL...';
+          loadingSubtitle.value = 'This may take a moment';
+          
+          // Validate URL for security
+          if (!validateURL(url)) {
+            throw new Error('Invalid or insecure URL');
+          }
+          
+          // Store the URL if it's from HTTPS
+          if (url.startsWith('https://')) {
+            currentEpubUrl.value = url;
+          } else {
+            currentEpubUrl.value = null;
+          }
+          
           if (url.startsWith('file://') || url.startsWith('epub://') || url.startsWith('https://')) {
             const response = await fetch(url);
+            if (!response.ok) {
+              throw new Error(`Failed to fetch EPUB from URL: ${response.status} ${response.statusText}`);
+            }
             const blob = await response.blob();
             // Ensure the blob has the correct MIME type for EPUB validation
             const epubBlob = new Blob([blob], { type: 'application/epub+zip' });
-            await loadEpub(epubBlob);
+            await loadEpub(epubBlob, true); // Preserve URL when loading from URL parameter
           }
         }
       } catch (error) {
         console.error('Error loading book from URL:', error);
+        // Clear loading state on error
+        isLoadingBook.value = false;
         addNotification({ 
           message: 'Failed to load book from URL', 
+          type: 'error' 
+        });
+      }
+    };
+
+    // Function to download the EPUB file
+    const downloadEpub = async () => {
+      if (!currentEpubUrl.value) {
+        addNotification({ 
+          message: 'No EPUB URL available for download', 
+          type: 'error' 
+        });
+        return;
+      }
+
+      try {
+        addNotification({ 
+          message: 'Downloading EPUB...', 
+          type: 'info' 
+        });
+
+        const response = await fetch(currentEpubUrl.value);
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status} ${response.statusText || ''}`.trim());
+        }
+        const blob = await response.blob();
+        
+        // Extract and sanitize filename from URL
+        const urlParts = currentEpubUrl.value.split('/');
+        const rawFilename = urlParts[urlParts.length - 1].split('?')[0] || 'book.epub';
+        const filename = sanitizeFilename(rawFilename);
+        
+        // Create download link
+        const downloadUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = downloadUrl;
+        link.download = filename.endsWith('.epub') ? filename : `${filename}.epub`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(downloadUrl);
+        
+        addNotification({ 
+          message: 'EPUB downloaded successfully!', 
+          type: 'success' 
+        });
+      } catch (error) {
+        console.error('Error downloading EPUB:', error);
+        addNotification({ 
+          message: 'Failed to download EPUB file', 
           type: 'error' 
         });
       }
@@ -530,6 +640,13 @@ export default {
       bookContent,
       tableOfContents,
       currentChapter,
+      currentEpubUrl,
+      isLoadingBook,
+      loadingTitle,
+      loadingMessage,
+      loadingSubtitle,
+      showLoadingProgress,
+      loadingProgress,
       toggleSidebar,
       scrollUp,
       scrollDown,
@@ -544,6 +661,7 @@ export default {
       handleDragLeave,
       handleDrop,
       toggleFullscreen,
+      downloadEpub,
       isBookLoaded
     };
   }
