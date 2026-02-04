@@ -16,9 +16,9 @@ A powerful browser extension for reading EPUB books directly in your browser wit
 ### 🎯 Smart Interactions
 - **Drag & Drop**: Drop EPUB files onto the reader to open immediately and add to the library
 
-- To get the most out of Epubespiar on Chromium browsers, ensure you allow the extension to access file urls.
+### Getting Started
 
-https://github.com/user-attachments/assets/b5099c4d-e9de-438e-8bc3-e55966feba3b
+https://github.com/user-attachments/assets/ca7e83c9-84d9-4d01-ac6f-1a946fbaeda7
 
 
 ## Architecture
@@ -134,4 +134,5 @@ When detected, it redirects to the extensions reader page, where you can read th
 - [ ] Progress Tracking
 - [ ] Url intercepts
 - [ ] What you thought was but is not while using the extension
+
 
