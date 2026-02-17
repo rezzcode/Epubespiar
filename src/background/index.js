@@ -12,22 +12,47 @@ const messageRateLimit = new Map();
 
 // Track open reader tabs with their instance IDs
 const readerTabs = new Map();
+const processedDownloads = new Set();
 
 // Function to generate random instance ID
 function generateInstanceId() {
   return Math.random().toString(36).substring(2, 15);
 }
 
-// Validate EPUB URL
-function isValidEpubUrl(url) {
+function isSafeSupportedUrl(url) {
   try {
     const urlObj = new URL(url);
-    return urlObj.pathname.toLowerCase().endsWith('.epub') &&
-           (urlObj.protocol === 'https:' || urlObj.protocol === 'file:' || urlObj.protocol === 'epub:') &&
+    return (urlObj.protocol === 'https:' || urlObj.protocol === 'file:' || urlObj.protocol === 'epub:') &&
            urlObj.pathname.length < 2048; // Prevent path traversal
   } catch {
     return false;
   }
+}
+
+function isLikelyEpubUrl(url) {
+  if (!isSafeSupportedUrl(url)) {
+    return false;
+  }
+
+  try {
+    const urlObj = new URL(url);
+    const combined = `${decodeURIComponent(urlObj.pathname)}${decodeURIComponent(urlObj.search || '')}`.toLowerCase();
+    return /\.epub($|[./?&#_-])/i.test(combined);
+  } catch {
+    return false;
+  }
+}
+
+function isLikelyEpubFilename(filename = '') {
+  if (!filename) {
+    return false;
+  }
+  return /\.epub($|\.)/i.test(filename.toLowerCase());
+}
+
+// Validate EPUB URL
+function isValidEpubUrl(url) {
+  return isLikelyEpubUrl(url);
 }
 
 // Check rate limit
@@ -50,9 +75,11 @@ function checkRateLimit(senderId) {
 }
 
 // Function to open or focus the reader tab
-async function openReaderTab(epubUrl = null, isNewInstance = false) {
+async function openReaderTab(epubUrl = null, isNewInstance = false, options = {}) {
   try {
-    if (epubUrl && !isValidEpubUrl(epubUrl)) {
+    const allowSafeNonEpubUrl = options.allowSafeNonEpubUrl === true;
+
+    if (epubUrl && !(isValidEpubUrl(epubUrl) || (allowSafeNonEpubUrl && isSafeSupportedUrl(epubUrl)))) {
       throw new Error('Invalid EPUB file URL');
     }
 
@@ -94,40 +121,83 @@ browser.action.onClicked.addListener((tab) => {
 // Track allowed downloads when user chooses to download instead of preview
 const allowedDownloads = new Set();
 
-// Intercept downloads with toggle support
-browser.downloads.onCreated.addListener(async (downloadItem) => {
+async function handlePotentialEpubDownload(downloadItem) {
+  if (!downloadItem || processedDownloads.has(downloadItem.id)) {
+    return;
+  }
+
   try {
     const urlObj = new URL(downloadItem.url);
+    const isFileEpub = urlObj.protocol === 'file:' && isLikelyEpubUrl(downloadItem.url);
 
-    // Always handle local EPUBs dragged into new tab (not affected by toggle)
-    if (urlObj.protocol === "file:" && isValidEpubUrl(downloadItem.url)) {
+    if (isFileEpub) {
+      processedDownloads.add(downloadItem.id);
       await browser.downloads.cancel(downloadItem.id);
       await browser.downloads.erase({ id: downloadItem.id });
-      await openReaderTab(downloadItem.url);
+      await openReaderTab(downloadItem.url, false, { allowSafeNonEpubUrl: true });
       return;
     }
 
-    // Handle HTTPS EPUBs based on toggle setting
-    if (urlObj.protocol === "https:" && isValidEpubUrl(downloadItem.url)) {
-      // Check if this download was explicitly allowed
-      if (allowedDownloads.has(downloadItem.url)) {
-        allowedDownloads.delete(downloadItem.url);
-        return;
-      }
+    if (urlObj.protocol !== 'https:') {
+      return;
+    }
 
-      // Check if intercept is enabled in storage
-      const result = await browser.storage.local.get('interceptDownloads');
-      const interceptEnabled = result.interceptDownloads === true;
-      
-      if (interceptEnabled) {
-        await browser.downloads.cancel(downloadItem.id);
-        await browser.downloads.erase({ id: downloadItem.id });
-        await openReaderTab(downloadItem.url);
-      }
-      // If not enabled, allow normal download
+    if (allowedDownloads.has(downloadItem.url)) {
+      allowedDownloads.delete(downloadItem.url);
+      return;
+    }
+
+    const result = await browser.storage.local.get('interceptDownloads');
+    const interceptEnabled = result.interceptDownloads === true;
+
+    if (!interceptEnabled) {
+      return;
+    }
+
+    const mimeType = (downloadItem.mime || '').toLowerCase();
+    const isEpubByUrl = isLikelyEpubUrl(downloadItem.url);
+    const isEpubByFilename = isLikelyEpubFilename(downloadItem.filename);
+    const isEpubByMime = mimeType === 'application/epub+zip';
+
+    if (isEpubByUrl || isEpubByFilename || isEpubByMime) {
+      processedDownloads.add(downloadItem.id);
+      await browser.downloads.cancel(downloadItem.id);
+      await browser.downloads.erase({ id: downloadItem.id });
+      await openReaderTab(downloadItem.url, false, { allowSafeNonEpubUrl: true });
     }
   } catch (error) {
-    console.error("Error processing download:", error);
+    console.error('Error processing potential EPUB download:', error);
+  }
+}
+
+// Intercept downloads with toggle support
+browser.downloads.onCreated.addListener(async (downloadItem) => {
+  await handlePotentialEpubDownload(downloadItem);
+});
+
+browser.downloads.onChanged.addListener(async (delta) => {
+  if (processedDownloads.has(delta.id)) {
+    return;
+  }
+
+  const hasRelevantChange = Boolean(delta.filename || delta.mime || delta.finalUrl || delta.state);
+  if (!hasRelevantChange) {
+    return;
+  }
+
+  try {
+    const [downloadItem] = await browser.downloads.search({ id: delta.id });
+    if (!downloadItem) {
+      return;
+    }
+
+    if (downloadItem.state === 'interrupted' || downloadItem.state === 'complete') {
+      return;
+    }
+
+    await handlePotentialEpubDownload(downloadItem);
+  } catch (error) {
+    console.error('Error handling download change:', error);
   }
 });
 
