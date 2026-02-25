@@ -1,6 +1,5 @@
 <template>
-  <!-- Loading Page - shown when loading a book -->
-  <loading-page 
+  <loading-page
     v-if="isLoadingBook"
     :title="loadingTitle"
     :message="loadingMessage"
@@ -8,20 +7,17 @@
     :showProgress="showLoadingProgress"
     :progress="loadingProgress"
   />
-  
-  <!-- Main Reader View - shown when not loading -->
-  <div 
+
+  <div
     v-else
     class="epub-reader"
     @dragover.prevent="handleDragEnter"
     @dragenter.prevent="handleDragEnter"
     @dragleave.prevent="handleDragLeave"
     @drop.prevent="handleDrop"
-    @scroll-up="scrollUp"
-    @scroll-down="scrollDown"
   >
-    <header-toolbar 
-      :currentPage="currentPage" 
+    <header-toolbar
+      :currentPage="currentPage"
       :totalPages="totalPages"
       :isBookLoaded="isBookLoaded"
       :fontSize="fontSize"
@@ -36,79 +32,48 @@
       @font-size-change="changeFontSize"
       @file-selected="loadEpub"
       @toggle-fullscreen="toggleFullscreen"
-      @toggle-settings="toggleSettings"
-      @toggle-bookshelf="toggleBookshelf"
       @download-epub="downloadEpub"
     />
-    
+
     <div class="main-content">
-      <!-- Backdrop overlay for mobile -->
-      <div 
-        v-if="sidebarOpen" 
+      <div
+        v-if="sidebarOpen"
         class="sidebar-backdrop"
         @click="toggleSidebar"
       ></div>
-      
-      <!-- Bookshelf sidebar overlay -->
-      <div 
-        v-if="bookshelfOpen" 
-        class="bookshelf-backdrop"
-        @click="toggleBookshelf"
-      ></div>
-      
-      <sidebar-component 
-        :isOpen="sidebarOpen" 
+
+      <sidebar-component
+        :isOpen="sidebarOpen"
         :toc="tableOfContents"
         :currentChapter="currentChapter"
         @navigate="navigateToLocation"
+        @close-book="handleCloseBook"
       />
-      
-      <bookshelf-sidebar
-        :isOpen="bookshelfOpen"
-        :books="recentBooks"
-        :isBookLoaded="isBookLoaded"
-        @close="toggleBookshelf"
-        @book-select="loadBookFromShelf"
-        @file-upload="handleFileUpload"
-        @book-deleted="handleBookDeleted"
-      />
-      
-      <epub-renderer 
+
+      <epub-renderer
         ref="bookContent"
         :isLoading="false"
         :isBookLoaded="isBookLoaded"
         :zoomLevel="zoomLevel"
-        :chapters="chapters"
-        :sidebarOffset="sidebarOffset"
-      />
-      
-      <reader-settings
-        :open="settingsOpen"
-        @close="toggleSettings"
         :fontSize="fontSize"
-        :zoom="zoomPercentage"
-        :fontWeight="fontWeight"
-        :fontFamily="fontFamily"
-        @font-size-change="changeFontSize"
-        @zoom-change="changeZoomFromSettings"
-        @font-weight-change="changeFontWeight"
-        @font-family-change="changeFontFamily"
+        :chapters="chapters"
+        @content-scroll="handleContentScroll"
+        @navigate-internal="handleInternalNavigation"
       />
     </div>
   </div>
 </template>
 
 <script>
-import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue';
+import { ref, onMounted, onUnmounted, computed } from 'vue';
 import HeaderToolbar from './reader_components/HeaderToolbar.vue';
 import SidebarComponent from './reader_components/SidebarComponent.vue';
 import EpubRenderer from './reader_components/EpubRenderer.vue';
 import LoadingPage from './reader_components/LoadingPage.vue';
 import useNotification from '../../composables/useNotification';
-import jszip from 'jszip';
-import ePub, { Rendition, Book as EpubBook } from 'epubjs';
-import { validateFile, sanitizeHTML, validateURL, sanitizeFilename } from '../../utils/security';
-import throttle from 'lodash.throttle';
+import { useBrowserLocalStorage } from '../../composables/useBrowserStorage';
+import JSZip from 'jszip';
+import { validateFile, validateURL, sanitizeFilename } from '../../utils/security';
 
 export default {
   components: {
@@ -117,24 +82,24 @@ export default {
     EpubRenderer,
     LoadingPage
   },
-  setup(props, { emit }) {
+  setup() {
     const { addNotification } = useNotification();
+
     const sidebarOpen = ref(false);
     const currentPage = ref(0);
     const totalPages = ref(100);
     const zoomLevel = ref(1);
+    const fontSize = ref(16);
+
     const bookContent = ref(null);
-    const book = ref(null);
-    const rendition = ref(null);
     const tableOfContents = ref([]);
+    const chapters = ref([]);
+    const spineItems = ref([]);
+    const currentChapter = ref(null);
+    const currentEpubUrl = ref(null);
+    const currentBookKey = ref(null);
+
     const isDragging = ref(false);
-    const fontSize = ref(16); // Font size in pixels (14-30 range)
-    const currentChapter = ref(null); // Track current chapter/section
-    const throttledUpdateProgress = ref(null); // Store throttled function for cleanup
-    const locationGenerationAbortController = ref(null); // AbortController for cancellation
-    const currentEpubUrl = ref(null); // Track the current EPUB URL (for HTTPS downloads)
-    
-    // Loading state variables
     const isLoadingBook = ref(false);
     const loadingTitle = ref('Loading Book');
     const loadingMessage = ref('Please wait while we prepare your book...');
@@ -142,46 +107,121 @@ export default {
     const showLoadingProgress = ref(false);
     const loadingProgress = ref(0);
 
-    // Maximum file size (100MB)
     const MAX_FILE_SIZE = 100 * 1024 * 1024;
     const ALLOWED_TYPES = ['application/epub+zip'];
-    const MIN_SWIPE_DISTANCE = 50; // Minimum pixels for swipe gesture
-    
-    // Performance tuning constants
-    const PROGRESS_UPDATE_THROTTLE_MS = 200; // Throttle delay for progress updates
-    const LOCATION_CHARS_PER_PAGE = 800; // Characters per virtual page for location generation (lower = more granular but slower)
-    const IDLE_CALLBACK_TIMEOUT_MS = 2000; // Timeout for idle callback
-    const LOCATION_GENERATION_FALLBACK_DELAY_MS = 300; // Fallback delay for location generation
+    const MIN_SWIPE_DISTANCE = 50;
 
-    // Helper function to check if locations are available
-    const hasLocationsGenerated = () => {
-      return book.value?.locations?.total > 0;
+    const { data: readingPositions, promise: readingPositionsReady } = useBrowserLocalStorage(
+      'readerReadingPositions',
+      {}
+    );
+
+    const createdObjectUrls = new Set();
+
+    const isBookLoaded = computed(() => chapters.value.length > 0);
+
+    const createTrackedObjectUrl = (blob) => {
+      const url = URL.createObjectURL(blob);
+      createdObjectUrls.add(url);
+      return url;
+    };
+
+    const cleanupObjectUrls = () => {
+      createdObjectUrls.forEach((url) => URL.revokeObjectURL(url));
+      createdObjectUrls.clear();
+    };
+
+    const resetReaderState = () => {
+      cleanupObjectUrls();
+      chapters.value = [];
+      tableOfContents.value = [];
+      spineItems.value = [];
+      currentChapter.value = null;
+      currentPage.value = 0;
+      currentBookKey.value = null;
+    };
+
+    const getBookStorageKey = (metadata) => {
+      const identifier = String(metadata?.identifier || '').trim();
+      if (identifier) return `id:${identifier}`;
+      const title = String(metadata?.title || 'untitled').trim().toLowerCase();
+      const creator = String(metadata?.creator || 'unknown').trim().toLowerCase();
+      return `meta:${title}::${creator}`;
+    };
+
+    const persistReadingPosition = () => {
+      if (!currentBookKey.value) return;
+
+      const el = getScrollElement();
+      if (!el) return;
+
+      const maxScroll = Math.max(el.scrollHeight - el.clientHeight, 1);
+      const progress = Math.min(100, Math.max(0, (el.scrollTop / maxScroll) * 100));
+
+      readingPositions.value = {
+        ...readingPositions.value,
+        [currentBookKey.value]: {
+          scrollPercentage: progress,
+          chapterHref: currentChapter.value,
+          timestamp: Date.now()
+        }
+      };
+    };
+
+    let persistTimer = null;
+    const schedulePersistReadingPosition = () => {
+      if (persistTimer) clearTimeout(persistTimer);
+      persistTimer = setTimeout(() => {
+        persistReadingPosition();
+      }, 700);
+    };
+
+    const restoreReadingPosition = async () => {
+      if (!currentBookKey.value || !chapters.value.length) return;
+
+      await readingPositionsReady;
+      const saved = readingPositions.value?.[currentBookKey.value];
+      if (!saved || typeof saved.scrollPercentage !== 'number') return;
+
+      setTimeout(() => {
+        const el = getScrollElement();
+        if (!el) return;
+
+        const maxScroll = Math.max(el.scrollHeight - el.clientHeight, 0);
+        el.scrollTop = (Math.min(100, Math.max(0, saved.scrollPercentage)) / 100) * maxScroll;
+      }, 50);
+
+      if (saved.chapterHref) {
+        currentChapter.value = saved.chapterHref;
+      }
     };
 
     const toggleSidebar = () => {
       sidebarOpen.value = !sidebarOpen.value;
     };
 
+    const handleCloseBook = () => {
+      resetReaderState();
+      currentEpubUrl.value = null;
+      currentBookKey.value = null;
+      sidebarOpen.value = false;
+
+      const homeUrl = `${window.location.pathname}${window.location.hash || ''}`;
+      window.history.replaceState({}, '', homeUrl);
+    };
+
+    const getScrollElement = () => bookContent.value?.getContentElement?.() || null;
+
     const scrollUp = () => {
-      if (rendition.value) {
-        rendition.value.prev();
-      }
+      const el = getScrollElement();
+      if (!el) return;
+      el.scrollBy({ top: -Math.max(el.clientHeight * 0.9, 280), behavior: 'smooth' });
     };
 
     const scrollDown = () => {
-      if (rendition.value) {
-        rendition.value.next();
-      }
-    };
-
-    const handleMouseScroll = (event) => {
-      if (!rendition.value) return;
-      
-      if (event.deltaY > 0) {
-        scrollDown();
-      } else if (event.deltaY < 0) {
-        scrollUp();
-      }
+      const el = getScrollElement();
+      if (!el) return;
+      el.scrollBy({ top: Math.max(el.clientHeight * 0.9, 280), behavior: 'smooth' });
     };
 
     const zoomIn = () => {
@@ -193,220 +233,369 @@ export default {
     };
 
     const changeZoom = (value) => {
-      zoomLevel.value = value === 'auto' ? 1 : parseInt(value) / 100;
-    };
-
-    // Helper function to apply font size theme
-    const applyFontSizeTheme = () => {
-      if (!rendition.value || !rendition.value.themes) {
-        console.log('Rendition or themes not available for font size application');
-        return;
-      }
-
-      try {
-        const fontTheme = {
-          body: {
-            'font-size': `${fontSize.value}px !important`,
-            'line-height': '1.6 !important'
-          },
-          'p, div, span, h1, h2, h3, h4, h5, h6, li, td, th': {
-            'font-size': `${fontSize.value}px !important`
-          }
-        };
-        
-        // Register theme to overwrite existing registration
-        rendition.value.themes.register('userFontSize', fontTheme);
-        rendition.value.themes.select('userFontSize');
-        
-        // Resize the rendition to recalculate layout
-        nextTick(() => {
-          if (rendition.value) {
-            rendition.value.resize();
-          }
-        });
-      } catch (error) {
-        console.error('Error applying font size theme:', error);
-      }
+      zoomLevel.value = value === 'auto' ? 1 : parseInt(value, 10) / 100;
     };
 
     const changeFontSize = (value) => {
-      fontSize.value = parseInt(value);
-      applyFontSizeTheme();
+      fontSize.value = parseInt(value, 10);
+    };
+
+    const normalizePath = (path) => String(path || '').replace(/^\/+/, '');
+
+    const resolvePath = (basePath, relativePath) => {
+      if (!relativePath) return '';
+      if (relativePath.startsWith('data:') || relativePath.startsWith('blob:')) return relativePath;
+      if (relativePath.startsWith('/')) return relativePath.slice(1);
+
+      const baseParts = normalizePath(basePath).split('/').filter(Boolean);
+      const relParts = relativePath.split('/');
+
+      for (const part of relParts) {
+        if (part === '..') {
+          baseParts.pop();
+        } else if (part && part !== '.') {
+          baseParts.push(part);
+        }
+      }
+
+      return baseParts.join('/');
+    };
+
+    const processCssUrls = async (cssText, zip, cssPath) => {
+      const cssBasePath = cssPath.includes('/') ? cssPath.substring(0, cssPath.lastIndexOf('/')) : '';
+      const urlPattern = /url\(['"]?([^'")]+)['"]?\)/g;
+      const matches = [...cssText.matchAll(urlPattern)];
+      let updated = cssText;
+
+      for (const match of matches) {
+        const original = match[1];
+        if (!original || original.startsWith('data:') || original.startsWith('blob:')) continue;
+
+        const resolved = resolvePath(cssBasePath, original);
+        const file = zip.file(resolved);
+        if (!file) continue;
+
+        try {
+          const blob = await file.async('blob');
+          const blobUrl = createTrackedObjectUrl(blob);
+          updated = updated.replace(match[0], `url('${blobUrl}')`);
+        } catch (error) {
+          console.warn('Unable to process CSS asset:', resolved, error);
+        }
+      }
+
+      return updated;
+    };
+
+    const parseAndProcessChapter = async (chapterContent, zip, basePath) => {
+      const parser = new DOMParser();
+      const xhtmlDoc = parser.parseFromString(chapterContent, 'application/xhtml+xml');
+      const parseError = xhtmlDoc.querySelector('parsererror');
+      const doc = parseError ? parser.parseFromString(chapterContent, 'text/html') : xhtmlDoc;
+
+      const links = doc.querySelectorAll("link[rel='stylesheet']");
+      for (const link of Array.from(links)) {
+        const href = link.getAttribute('href') || '';
+        const resolved = resolvePath(basePath, href);
+        const file = zip.file(resolved);
+        if (!file) continue;
+
+        try {
+          const cssContent = await file.async('string');
+          const processedCss = await processCssUrls(cssContent, zip, resolved);
+          const cssBlob = new Blob([processedCss], { type: 'text/css' });
+          link.setAttribute('href', createTrackedObjectUrl(cssBlob));
+        } catch (error) {
+          console.warn('Unable to process stylesheet:', resolved, error);
+        }
+      }
+
+      const styleTags = doc.querySelectorAll('style');
+      for (const styleTag of Array.from(styleTags)) {
+        if (!styleTag.textContent) continue;
+        styleTag.textContent = await processCssUrls(styleTag.textContent, zip, basePath);
+      }
+
+      const images = doc.querySelectorAll('img');
+      for (const image of Array.from(images)) {
+        const src = image.getAttribute('src') || '';
+        if (!src || src.startsWith('data:') || src.startsWith('blob:')) continue;
+
+        const resolved = resolvePath(basePath, src);
+        const file = zip.file(resolved);
+        if (!file) continue;
+
+        try {
+          const blob = await file.async('blob');
+          image.setAttribute('src', createTrackedObjectUrl(blob));
+        } catch (error) {
+          console.warn('Unable to process image:', resolved, error);
+        }
+      }
+
+      const svgImages = doc.querySelectorAll('image');
+      for (const image of Array.from(svgImages)) {
+        const href = image.getAttribute('xlink:href') || image.getAttribute('href') || '';
+        if (!href || href.startsWith('data:') || href.startsWith('blob:')) continue;
+
+        const resolved = resolvePath(basePath, href);
+        const file = zip.file(resolved);
+        if (!file) continue;
+
+        try {
+          const blob = await file.async('blob');
+          const blobUrl = createTrackedObjectUrl(blob);
+          image.setAttribute('href', blobUrl);
+          image.removeAttribute('xlink:href');
+        } catch (error) {
+          console.warn('Unable to process SVG image:', resolved, error);
+        }
+      }
+
+      return new XMLSerializer().serializeToString(doc);
+    };
+
+    const parseOpfPath = (containerXml) => {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(containerXml, 'application/xml');
+      return doc.querySelector('rootfile')?.getAttribute('full-path') || null;
+    };
+
+    const parseTableOfContents = async (zip, manifestById, manifestItems, basePath) => {
+      const ncxManifestItem = manifestItems.find(
+        (item) => item.mediaType === 'application/x-dtbncx+xml'
+      );
+
+      if (!ncxManifestItem?.href) return [];
+
+      const ncxPath = resolvePath(basePath, ncxManifestItem.href);
+      const ncxContent = await zip.file(ncxPath)?.async('string');
+      if (!ncxContent) return [];
+
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(ncxContent, 'application/xml');
+
+      const mapNavPoint = (navPoint) => {
+        const label = navPoint.querySelector('navLabel > text')?.textContent?.trim() || 'Section';
+        const src = navPoint.querySelector('content')?.getAttribute('src') || '';
+        const fullHref = resolvePath(basePath, src);
+
+        const children = Array.from(navPoint.children)
+          .filter((child) => child.tagName.toLowerCase() === 'navpoint')
+          .map(mapNavPoint);
+
+        return {
+          label,
+          href: fullHref,
+          subitems: children
+        };
+      };
+
+      return Array.from(doc.querySelectorAll('navMap > navPoint')).map(mapNavPoint);
+    };
+
+    const flattenToc = (toc, bucket = []) => {
+      toc.forEach((entry) => {
+        bucket.push({ label: entry.label, href: entry.href, subitems: entry.subitems || [] });
+        if (entry.subitems?.length) flattenToc(entry.subitems, bucket);
+      });
+      return bucket;
+    };
+
+    const parseEpubArchive = async (file) => {
+      const arrayBuffer = await file.arrayBuffer();
+      const zip = await JSZip.loadAsync(arrayBuffer);
+
+      const containerContent = await zip.file('META-INF/container.xml')?.async('string');
+      if (!containerContent) {
+        throw new Error('Invalid EPUB: Missing META-INF/container.xml');
+      }
+
+      const opfPath = parseOpfPath(containerContent);
+      if (!opfPath) {
+        throw new Error('Invalid EPUB: Could not determine OPF path');
+      }
+
+      const opfContent = await zip.file(opfPath)?.async('string');
+      if (!opfContent) {
+        throw new Error('Invalid EPUB: Missing package document');
+      }
+
+      const opfBasePath = opfPath.includes('/') ? opfPath.substring(0, opfPath.lastIndexOf('/') + 1) : '';
+
+      const parser = new DOMParser();
+      const opfDoc = parser.parseFromString(opfContent, 'application/xml');
+
+      const metadata = {
+        title: opfDoc.querySelector('metadata > title, metadata > dc\\:title')?.textContent?.trim() || 'Untitled',
+        creator: opfDoc.querySelector('metadata > creator, metadata > dc\\:creator')?.textContent?.trim() || 'Unknown Author',
+        identifier: opfDoc.querySelector('metadata > identifier, metadata > dc\\:identifier')?.textContent?.trim() || ''
+      };
+
+      const manifestItems = Array.from(opfDoc.querySelectorAll('manifest > item')).map((item) => ({
+        id: item.getAttribute('id') || '',
+        href: item.getAttribute('href') || '',
+        mediaType: item.getAttribute('media-type') || ''
+      }));
+
+      const manifestById = new Map(manifestItems.map((item) => [item.id, item]));
+
+      const parsedSpineItems = Array.from(opfDoc.querySelectorAll('spine > itemref'))
+        .map((itemRef) => {
+          const idref = itemRef.getAttribute('idref') || '';
+          const manifestEntry = manifestById.get(idref);
+          if (!manifestEntry?.href) return null;
+
+          return {
+            id: idref,
+            href: resolvePath(opfBasePath, manifestEntry.href)
+          };
+        })
+        .filter(Boolean);
+
+      spineItems.value = parsedSpineItems;
+
+      const parsedToc = await parseTableOfContents(zip, manifestById, manifestItems, opfBasePath);
+      const flatToc = flattenToc(parsedToc);
+
+      const chapterEntries = [];
+      for (let index = 0; index < parsedSpineItems.length; index += 1) {
+        const spineItem = parsedSpineItems[index];
+        const chapterFile = zip.file(spineItem.href);
+        if (!chapterFile) continue;
+
+        try {
+          const rawContent = await chapterFile.async('string');
+          const chapterBasePath = spineItem.href.includes('/')
+            ? spineItem.href.substring(0, spineItem.href.lastIndexOf('/'))
+            : '';
+          const content = await parseAndProcessChapter(rawContent, zip, chapterBasePath);
+
+          const chapterFileName = spineItem.href.split('/').pop() || spineItem.href;
+          const matchingToc = flatToc.find((item) => {
+            const tocFile = item.href.split('#')[0].split('/').pop();
+            return tocFile === chapterFileName;
+          });
+
+          chapterEntries.push({
+            index,
+            href: spineItem.href,
+            title: matchingToc?.label || `Section ${index + 1}`,
+            content
+          });
+        } catch (error) {
+          console.error(`Failed to parse chapter ${index}:`, error);
+        }
+      }
+
+      const sidebarToc = parsedToc.length
+        ? parsedToc
+        : chapterEntries.map((chapter, index) => ({
+            label: chapter.title,
+            href: chapter.href,
+            subitems: []
+          }));
+
+      return {
+        metadata,
+        sidebarToc,
+        chapterEntries
+      };
     };
 
     const loadEpub = async (file, preserveUrl = false) => {
       if (!file) return;
-      
-      // Set loading state
+
       isLoadingBook.value = true;
       loadingTitle.value = 'Loading Book';
       loadingMessage.value = 'Preparing your EPUB file...';
       loadingSubtitle.value = 'This may take a moment';
-      
+      showLoadingProgress.value = false;
+
       try {
-        // Clear the current EPUB URL when loading from file (not from URL)
         if (!preserveUrl) {
           currentEpubUrl.value = null;
         }
-        
-        // Validate file
+
         if (!validateFile(file, MAX_FILE_SIZE, ALLOWED_TYPES)) {
-          throw new Error('Invalid file type or size');
+          throw new Error('Invalid EPUB file type or size');
         }
 
-        loadingMessage.value = 'Processing EPUB file...';
-        const arrayBuffer = await file.arrayBuffer();
-        
-        // Clean up previous book and event listeners
-        if (throttledUpdateProgress.value) {
-          if (rendition.value) {
-            rendition.value.off('relocated', throttledUpdateProgress.value);
-          }
-          throttledUpdateProgress.value.cancel();
-          throttledUpdateProgress.value = null;
-        }
-        
-        // Cancel ongoing location generation
-        if (locationGenerationAbortController.value) {
-          locationGenerationAbortController.value.abort();
-          locationGenerationAbortController.value = null;
-        }
-        
-        if (book.value) {
-          book.value.destroy();
-          book.value = null; // Explicitly set to null
-        }
-        
-        loadingMessage.value = 'Initializing book...';
-        book.value = ePub(arrayBuffer);
-        await book.value.ready;
-        
-        // Hide loading screen before rendering so book-content element exists in DOM
-        isLoadingBook.value = false;
-        
-        // Wait for DOM to update before rendering
-        await nextTick();
-        
-        rendition.value = book.value.renderTo("book-content", {
-          manager: "continuous",
-          flow: "scrolled",
-          width: "100%",
-          height: "100%"
+        resetReaderState();
+
+        loadingMessage.value = 'Parsing book metadata...';
+        const { metadata, sidebarToc, chapterEntries } = await parseEpubArchive(file);
+
+        loadingMessage.value = 'Rendering chapters...';
+        chapters.value = chapterEntries;
+        tableOfContents.value = sidebarToc;
+        currentChapter.value = chapterEntries[0]?.href || null;
+        currentBookKey.value = getBookStorageKey(metadata);
+        await restoreReadingPosition();
+
+        addNotification({
+          message: `Loaded: ${metadata.title} — ${metadata.creator}`,
+          type: 'success'
         });
-
-        await rendition.value.display();
-
-        applyFontSizeTheme();
-
-        // Improved progress handling with throttled updates
-        throttledUpdateProgress.value = throttle((location) => {
-          // Track current chapter from location
-          if (location.start.href) {
-            currentChapter.value = location.start.href;
-          }
-          
-          // Prefer accurate percentage if locations are available
-          try {
-            if (book.value?.locations?.percentageFromCfi && hasLocationsGenerated()) {
-              const percent = book.value.locations.percentageFromCfi(location.start.cfi);
-              currentPage.value = Math.floor(percent * 100);
-              return;
-            }
-          } catch (e) {
-            // Ignore: Fall back to spine-based calculation if percentageFromCfi fails
-          }
-
-          // Lightweight fallback: approximate progress by spine index
-          try {
-            const spineLen = book.value?.spine?.spineItems?.length || 1;
-            const spineIndex = location?.start?.index ?? 0;
-            currentPage.value = Math.floor((spineIndex / Math.max(spineLen, 1)) * 100);
-          } catch (e) {
-            // Ignore: Fallback calculation errors are non-critical
-          }
-        }, PROGRESS_UPDATE_THROTTLE_MS, { leading: true, trailing: true });
-
-        rendition.value.on("relocated", throttledUpdateProgress.value);
-
-        // Generate locations in the background with coarser granularity
-        const hasGenerateMethod = book.value?.locations?.generate;
-        const needGenerate = hasGenerateMethod && !hasLocationsGenerated();
-        
-        if (needGenerate) {
-          locationGenerationAbortController.value = new AbortController();
-          const currentBook = book.value;
-          const abortSignal = locationGenerationAbortController.value.signal;
-          
-          const generateFn = () => {
-            // Guard: verify book is still valid and matches the expected book
-            if (!book.value || book.value !== currentBook || abortSignal.aborted) {
-              return;
-            }
-            
-            const thisController = locationGenerationAbortController.value;
-            const locationsObj = book.value.locations;
-            
-            abortSignal.addEventListener('abort', () => {
-              try {
-                if (locationsObj?.q?.stop) {
-                  locationsObj.q.stop();
-                }
-              } catch (err) {
-                // Silently ignore errors from stopping the queue, as cancellation is best-effort
-              }
-            }, { once: true });
-            
-            book.value.locations.generate(LOCATION_CHARS_PER_PAGE).catch(err => {
-              if (!abortSignal.aborted) {
-                console.warn('locations.generate failed:', err);
-              }
-            }).finally(() => {
-              // Only clear the controller if it is still the one we started with
-              if (locationGenerationAbortController.value === thisController) {
-                locationGenerationAbortController.value = null;
-              }
-            });
-          };
-
-          if ('requestIdleCallback' in window) {
-            requestIdleCallback(generateFn, { timeout: IDLE_CALLBACK_TIMEOUT_MS });
-          } else {
-            setTimeout(generateFn, LOCATION_GENERATION_FALLBACK_DELAY_MS);
-          }
-        }
-        
-        book.value.loaded.navigation.then(nav => {
-          // Only sanitize table of contents labels
-          tableOfContents.value = nav.toc.map(item => ({
-            ...item,
-            label: sanitizeHTML(item.label)
-          }));
-        });
-
-        console.log('Book loaded successfully, book.value:', !!book.value);
-        addNotification({ message: 'Book loaded successfully!', type: 'success' });
-      } catch (err) {
-        console.error('Failed to load book:', err);
-        book.value = null; // Ensure book is set to null on error
-        addNotification({ message: 'Failed to load book. Please check the file format and size.', type: 'error' });
-        
-        // Clear loading state on error
+      } catch (error) {
+        console.error('Failed to load EPUB:', error);
+        resetReaderState();
+        addNotification({ message: 'Failed to load book. Please check the EPUB file.', type: 'error' });
+      } finally {
         isLoadingBook.value = false;
       }
     };
 
     const navigateToLocation = (href) => {
-      if (rendition.value) {
-        rendition.value.display(href);
-        // Close sidebar on mobile after navigation for better UX
-        if (window.innerWidth < 768) {
-          sidebarOpen.value = false;
+      if (!href || !bookContent.value?.scrollToChapter) return;
+
+      const [targetFile, fragment] = href.split('#');
+
+      if (!targetFile) {
+        const currentIndex = chapters.value.findIndex((chapter) => chapter.href === currentChapter.value);
+        if (currentIndex >= 0) {
+          bookContent.value.scrollToChapter(currentIndex, fragment || null);
         }
+        return;
+      }
+
+      const targetName = targetFile.split('/').pop() || targetFile;
+      const chapterIndex = chapters.value.findIndex((chapter) => {
+        const chapterName = chapter.href.split('/').pop() || chapter.href;
+        return chapter.href === targetFile || chapterName === targetName || chapter.href.endsWith(targetFile);
+      });
+
+      if (chapterIndex >= 0) {
+        currentChapter.value = fragment ? `${chapters.value[chapterIndex].href}#${fragment}` : chapters.value[chapterIndex].href;
+        bookContent.value.scrollToChapter(chapterIndex, fragment || null);
+      }
+
+      if (window.innerWidth < 768) {
+        sidebarOpen.value = false;
       }
     };
 
+    const handleInternalNavigation = ({ href, chapterIndex }) => {
+      if (!href) return;
+
+      if (href.startsWith('#')) {
+        bookContent.value?.scrollToChapter(chapterIndex, href.slice(1));
+        return;
+      }
+
+      navigateToLocation(href);
+    };
+
+    const handleContentScroll = ({ progress, chapterIndex }) => {
+      currentPage.value = Number.isFinite(progress) ? Math.round(progress) : 0;
+      if (chapterIndex >= 0 && chapters.value[chapterIndex]) {
+        currentChapter.value = chapters.value[chapterIndex].href;
+      }
+      schedulePersistReadingPosition();
+    };
+
     const handleDragEnter = (event) => {
-      const items = event.dataTransfer.items;
+      const items = event.dataTransfer?.items || [];
       if (items.length === 1 && (items[0].type === 'application/epub+zip' || items[0].kind === 'file')) {
         isDragging.value = true;
       }
@@ -418,42 +607,11 @@ export default {
 
     const handleDrop = async (event) => {
       isDragging.value = false;
-      const files = event.dataTransfer.files;
-      if (files.length > 0 && files[0].name.toLowerCase().endsWith('.epub')) {
+      const files = event.dataTransfer?.files;
+      if (files?.length > 0 && files[0].name.toLowerCase().endsWith('.epub')) {
         await loadEpub(files[0]);
       } else {
-        addNotification({ message: 'Please select a valid ePub file', type: 'error' });
-      }
-    };
-
-    const handleKeyUp = (e) => {
-      if (document.activeElement.tagName === 'INPUT') return;
-      if (e.key === 'ArrowLeft') scrollUp();
-      if (e.key === 'ArrowRight') scrollDown();
-    };
-
-    // Touch gesture handling for mobile
-    let touchStartX = 0;
-    let touchStartY = 0;
-    
-    const handleTouchStart = (e) => {
-      touchStartX = e.touches[0].clientX;
-      touchStartY = e.touches[0].clientY;
-    };
-
-    const handleTouchEnd = (e) => {
-      const touchEndX = e.changedTouches[0].clientX;
-      const touchEndY = e.changedTouches[0].clientY;
-      const deltaX = touchEndX - touchStartX;
-      const deltaY = touchEndY - touchStartY;
-      
-      // Swipe detection
-      if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > MIN_SWIPE_DISTANCE) {
-        if (deltaX > 0) {
-          scrollUp(); // Swipe right
-        } else {
-          scrollDown(); // Swipe left
-        }
+        addNotification({ message: 'Please select a valid EPUB file', type: 'error' });
       }
     };
 
@@ -465,90 +623,57 @@ export default {
       }
     };
 
-    // Add a computed property for isBookLoaded
-    const isBookLoaded = computed(() => {
-      const loaded = !!book.value;
-      console.log('isBookLoaded computed:', loaded);
-      return loaded;
-    });
-
-    // Add function to load book from URL
     const loadBookFromUrl = async () => {
       try {
         const params = new URLSearchParams(window.location.search);
         const fileParam = params.get('file');
-        
-        if (fileParam) {
-          const url = decodeURIComponent(fileParam);
-          
-          // Set loading state immediately before fetching
-          isLoadingBook.value = true;
-          loadingTitle.value = 'Loading Book';
-          loadingMessage.value = 'Fetching EPUB file from URL...';
-          loadingSubtitle.value = 'This may take a moment';
-          
-          // Validate URL for security
-          if (!validateURL(url)) {
-            throw new Error('Invalid or insecure URL');
-          }
-          
-          // Store the URL if it's from HTTPS
-          if (url.startsWith('https://')) {
-            currentEpubUrl.value = url;
-          } else {
-            currentEpubUrl.value = null;
-          }
-          
-          if (url.startsWith('file://') || url.startsWith('epub://') || url.startsWith('https://')) {
-            const response = await fetch(url);
-            if (!response.ok) {
-              throw new Error(`Failed to fetch EPUB from URL: ${response.status} ${response.statusText}`);
-            }
-            const blob = await response.blob();
-            // Ensure the blob has the correct MIME type for EPUB validation
-            const epubBlob = new Blob([blob], { type: 'application/epub+zip' });
-            await loadEpub(epubBlob, true); // Preserve URL when loading from URL parameter
-          }
+        if (!fileParam) return;
+
+        const url = decodeURIComponent(fileParam);
+        if (!validateURL(url)) {
+          throw new Error('Invalid or insecure URL');
         }
+
+        isLoadingBook.value = true;
+        loadingTitle.value = 'Loading Book';
+        loadingMessage.value = 'Fetching EPUB file from URL...';
+        loadingSubtitle.value = 'This may take a moment';
+
+        currentEpubUrl.value = url.startsWith('https://') ? url : null;
+
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch EPUB: ${response.status} ${response.statusText}`);
+        }
+
+        const blob = await response.blob();
+        const epubFile = new File([blob], 'downloaded.epub', { type: 'application/epub+zip' });
+        await loadEpub(epubFile, true);
       } catch (error) {
         console.error('Error loading book from URL:', error);
-        // Clear loading state on error
         isLoadingBook.value = false;
-        addNotification({ 
-          message: 'Failed to load book from URL', 
-          type: 'error' 
-        });
+        addNotification({ message: 'Failed to load book from URL', type: 'error' });
       }
     };
 
-    // Function to download the EPUB file
     const downloadEpub = async () => {
       if (!currentEpubUrl.value) {
-        addNotification({ 
-          message: 'No EPUB URL available for download', 
-          type: 'error' 
-        });
+        addNotification({ message: 'No EPUB URL available for download', type: 'error' });
         return;
       }
 
       try {
-        addNotification({ 
-          message: 'Downloading EPUB...', 
-          type: 'info' 
-        });
+        addNotification({ message: 'Downloading EPUB...', type: 'info' });
 
         const response = await fetch(currentEpubUrl.value);
         if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status} ${response.statusText || ''}`.trim());
+          throw new Error(`HTTP error: ${response.status} ${response.statusText || ''}`.trim());
         }
+
         const blob = await response.blob();
-        
-        // Extract and sanitize filename from URL
-        const urlParts = currentEpubUrl.value.split('/');
-        const rawFilename = urlParts[urlParts.length - 1].split('?')[0] || 'book.epub';
-        const filename = sanitizeFilename(rawFilename);
-        
-        // Create download link
+        const rawName = currentEpubUrl.value.split('/').pop()?.split('?')[0] || 'book.epub';
+        const filename = sanitizeFilename(rawName);
+
         const downloadUrl = URL.createObjectURL(blob);
         const link = document.createElement('a');
         link.href = downloadUrl;
@@ -557,78 +682,55 @@ export default {
         link.click();
         document.body.removeChild(link);
         URL.revokeObjectURL(downloadUrl);
-        
-        addNotification({ 
-          message: 'EPUB downloaded successfully!', 
-          type: 'success' 
-        });
+
+        addNotification({ message: 'EPUB downloaded successfully!', type: 'success' });
       } catch (error) {
         console.error('Error downloading EPUB:', error);
-        addNotification({ 
-          message: 'Failed to download EPUB file', 
-          type: 'error' 
-        });
+        addNotification({ message: 'Failed to download EPUB file', type: 'error' });
       }
     };
 
-    const handleResize = () => {
-      // Resize rendition when window size changes
-      if (rendition.value) {
-        nextTick(() => {
-          rendition.value.resize();
-        });
+    const handleKeyUp = (event) => {
+      if (document.activeElement?.tagName === 'INPUT') return;
+      if (event.key === 'ArrowLeft') scrollUp();
+      if (event.key === 'ArrowRight') scrollDown();
+    };
+
+    let touchStartX = 0;
+    let touchStartY = 0;
+
+    const handleTouchStart = (event) => {
+      touchStartX = event.touches[0].clientX;
+      touchStartY = event.touches[0].clientY;
+    };
+
+    const handleTouchEnd = (event) => {
+      const deltaX = event.changedTouches[0].clientX - touchStartX;
+      const deltaY = event.changedTouches[0].clientY - touchStartY;
+
+      if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > MIN_SWIPE_DISTANCE) {
+        if (deltaX > 0) scrollUp();
+        else scrollDown();
       }
     };
 
     onMounted(() => {
       document.addEventListener('keyup', handleKeyUp);
-      window.addEventListener('resize', handleResize);
-      
-      // Access the book-content element from the EpubRenderer component
-      nextTick(() => {
-        const bookContentElement = bookContent.value?.$refs?.bookContent || 
-                                   bookContent.value?.$el?.querySelector('#book-content');
-        if (bookContentElement) {
-          bookContentElement.addEventListener("wheel", handleMouseScroll);
-          bookContentElement.addEventListener('touchstart', handleTouchStart, { passive: true });
-          bookContentElement.addEventListener('touchend', handleTouchEnd, { passive: true });
-        }
-      });
-      
-      // Load book from URL if present
+      window.addEventListener('touchstart', handleTouchStart, { passive: true });
+      window.addEventListener('touchend', handleTouchEnd, { passive: true });
       loadBookFromUrl();
     });
 
     onUnmounted(() => {
       document.removeEventListener('keyup', handleKeyUp);
-      window.removeEventListener('resize', handleResize);
-      
-      // Access the book-content element from the EpubRenderer component
-      const bookContentElement = bookContent.value?.$refs?.bookContent || 
-                                 bookContent.value?.$el?.querySelector('#book-content');
-      if (bookContentElement) {
-        bookContentElement.removeEventListener("wheel", handleMouseScroll);
-        bookContentElement.removeEventListener('touchstart', handleTouchStart);
-        bookContentElement.removeEventListener('touchend', handleTouchEnd);
+      window.removeEventListener('touchstart', handleTouchStart);
+      window.removeEventListener('touchend', handleTouchEnd);
+      if (persistTimer) {
+        clearTimeout(persistTimer);
+        persistTimer = null;
       }
-      
-      // Clean up throttled function
-      if (throttledUpdateProgress.value) {
-        if (rendition.value) {
-          rendition.value.off('relocated', throttledUpdateProgress.value);
-        }
-        throttledUpdateProgress.value.cancel();
-        throttledUpdateProgress.value = null;
-      }
-      // Cancel location generation
-      if (locationGenerationAbortController.value) {
-        locationGenerationAbortController.value.abort();
-        locationGenerationAbortController.value = null;
-      }
-      // Clean up book resources
-      if (book.value) {
-        book.value.destroy();
-      }
+      persistReadingPosition();
+      cleanupObjectUrls();
     });
 
     return {
@@ -640,6 +742,7 @@ export default {
       bookContent,
       tableOfContents,
       currentChapter,
+      chapters,
       currentEpubUrl,
       isLoadingBook,
       loadingTitle,
@@ -647,6 +750,7 @@ export default {
       loadingSubtitle,
       showLoadingProgress,
       loadingProgress,
+      isBookLoaded,
       toggleSidebar,
       scrollUp,
       scrollDown,
@@ -654,15 +758,16 @@ export default {
       zoomOut,
       changeZoom,
       changeFontSize,
-      applyFontSizeTheme,
       loadEpub,
+      handleCloseBook,
       navigateToLocation,
+      handleInternalNavigation,
+      handleContentScroll,
       handleDragEnter,
       handleDragLeave,
       handleDrop,
       toggleFullscreen,
-      downloadEpub,
-      isBookLoaded
+      downloadEpub
     };
   }
 };
@@ -686,7 +791,7 @@ export default {
 
 .sidebar-backdrop {
   position: fixed;
-  top: 36px; /* Height of header toolbar */
+  top: 36px;
   left: 0;
   right: 0;
   bottom: 0;
@@ -702,11 +807,5 @@ export default {
   to {
     opacity: 1;
   }
-}
-
-.error {
-  color: #dc3545;
-  padding: 1rem;
-  text-align: center;
 }
 </style>

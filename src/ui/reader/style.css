@@ -23,6 +23,7 @@
   --toolbar-sp-color: #6a666687;
   --border-color: #d1d5db;
   --button-hover-bg: rgba(16, 185, 129, 0.1);
+  --epub-container-bg: white;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -35,8 +36,10 @@
     --hover-outline-color: #8f8f9d;
     --toolbar-bg-color: #38383d;
     --text-color: #f5f5f5;
+    --epub-text-color: #e89c30;
     --toolbar-sp-color: #00000063;
     --button-hover-bg: rgba(143, 143, 157, 0.15);
+    --epub-container-bg: #35353b;
   }
 }
 

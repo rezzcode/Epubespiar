@@ -6,71 +6,84 @@
       </div>
       <div class="sidebar-resizer" @mousedown="startResizing"></div>
       <div class="sidebar-content" ref="contentContainer">
-        <ul class="toc-list">
-          <li 
-            v-for="(item, index) in toc" 
-            :key="`chapter-${index}`" 
-            class="toc-item"
-            :class="{ 
-              expanded: expandedItems[index]
-            }"
-          >
-            <div class="toc-item-content">
-              <button 
-                class="toc-link"
-                :class="{ 
-                  active: isExactActiveItem(item.href),
-                  'has-subitems': item.subitems && item.subitems.length > 0
-                }"
-                @click.stop="handleItemClick(item, index)"
-                :title="item.label"
-              >
-                <span 
-                  v-if="item.subitems && item.subitems.length > 0" 
-                  class="expand-icon"
-                  @click.stop="handleExpandClick(index)"
+        <div class="toc-wrapper">
+          <ul class="toc-list">
+            <li 
+              v-for="(item, index) in toc" 
+              :key="`chapter-${index}`" 
+              class="toc-item"
+              :class="{ 
+                expanded: expandedItems[index]
+              }"
+            >
+              <div class="toc-item-content">
+                <button 
+                  class="toc-link"
+                  :class="{ 
+                    active: isExactActiveItem(item.href),
+                    'has-subitems': item.subitems && item.subitems.length > 0
+                  }"
+                  @click.stop="handleItemClick(item, index)"
+                  :title="item.label"
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
-                    <path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/>
-                  </svg>
-                </span>
-                <span class="toc-label">{{ item.label }}</span>
-                <span v-if="isExactActiveItem(item.href)" class="active-indicator"></span>
-              </button>
-            </div>
-
-            <!-- Nested subitems -->
-            <transition name="expand" @enter="onEnter" @leave="onLeave">
-              <ul 
-                v-if="item.subitems && item.subitems.length > 0 && expandedItems[index]" 
-                class="toc-sublist"
-              >
-                <li 
-                  v-for="(subitem, subIndex) in item.subitems" 
-                  :key="`subitem-${index}-${subIndex}`" 
-                  class="toc-subitem"
-                >
-                  <button 
-                    class="toc-link toc-sublink"
-                    :class="{ active: isExactActiveItem(subitem.href) }"
-                    @click.stop="handleNavigate(subitem.href)"
-                    :title="subitem.label"
+                  <span 
+                    v-if="item.subitems && item.subitems.length > 0" 
+                    class="expand-icon"
+                    @click.stop="handleExpandClick(index)"
                   >
-                    <span class="toc-label">{{ subitem.label }}</span>
-                    <span v-if="isExactActiveItem(subitem.href)" class="active-indicator"></span>
-                  </button>
-                </li>
-              </ul>
-            </transition>
-          </li>
-        </ul>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+                      <path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/>
+                    </svg>
+                  </span>
+                  <span class="toc-label">{{ item.label }}</span>
+                  <span v-if="isExactActiveItem(item.href)" class="active-indicator"></span>
+                </button>
+              </div>
 
-        <!-- Empty state -->
-        <div v-if="toc.length === 0" class="empty-state">
-          <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="currentColor" viewBox="0 0 16 16">
-            <path d="M1 2.5A2.5 2.5 0 0 1 3.5 0h8A2.5 2.5 0 0 1 14 2.5v11a2.5 2.5 0 0 1-2.5 2.5h-8A2.5 2.5 0 0 1 1 13.5v-11zM3.5 1A1.5 1.5 0 0 0 2 2.5v11A1.5 1.5 0 0 0 3.5 15h8a1.5 1.5 0 0 0 1.5-1.5v-11A1.5 1.5 0 0 0 11.5 1h-8z"/>
-          </svg>
-          <p>No table of contents</p>
+              <!-- Nested subitems -->
+              <transition name="expand" @enter="onEnter" @leave="onLeave">
+                <ul 
+                  v-if="item.subitems && item.subitems.length > 0 && expandedItems[index]" 
+                  class="toc-sublist"
+                >
+                  <li 
+                    v-for="(subitem, subIndex) in item.subitems" 
+                    :key="`subitem-${index}-${subIndex}`" 
+                    class="toc-subitem"
+                  >
+                    <button 
+                      class="toc-link toc-sublink"
+                      :class="{ active: isExactActiveItem(subitem.href) }"
+                      @click.stop="handleNavigate(subitem.href)"
+                      :title="subitem.label"
+                    >
+                      <span class="toc-label">{{ subitem.label }}</span>
+                      <span v-if="isExactActiveItem(subitem.href)" class="active-indicator"></span>
+                    </button>
+                  </li>
+                </ul>
+              </transition>
+            </li>
+          </ul>
+
+          <!-- Empty state -->
+          <div v-if="toc.length === 0" class="empty-state">
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="currentColor" viewBox="0 0 16 16">
+              <path d="M1 2.5A2.5 2.5 0 0 1 3.5 0h8A2.5 2.5 0 0 1 14 2.5v11a2.5 2.5 0 0 1-2.5 2.5h-8A2.5 2.5 0 0 1 1 13.5v-11zM3.5 1A1.5 1.5 0 0 0 2 2.5v11A1.5 1.5 0 0 0 3.5 15h8a1.5 1.5 0 0 0 1.5-1.5v-11A1.5 1.5 0 0 0 11.5 1h-8z"/>
+            </svg>
+            <p>No table of contents</p>
+          </div>
+        </div>
+
+        <!-- Footer with Close Book button -->
+        <div class="sidebar-footer">
+          <button class="close-book-btn" @click="handleCloseBook">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+              <path d="M8.5 10c-.276 0-.5-.448-.5-1s.224-1 .5-1 .5.448.5 1-.224 1-.5 1z"/>
+              <path d="M10.828.122A.5.5 0 0 1 11 .5V1h.5A1.5 1.5 0 0 1 13 2.5V15h1.5a.5.5 0 0 1 0 1h-13a.5.5 0 0 1 0-1H3V1.5a.5.5 0 0 1 .43-.495l7-1a.5.5 0 0 1 .398.117zM11.5 2H11v13h1V2.5a.5.5 0 0 0-.5-.5zM4 1.934V15h6V1.077l-6 .857z"/>
+            </svg>
+            <span>Close Book</span>
+          </button>
         </div>
       </div>
     </div>
@@ -94,7 +107,7 @@
         default: null
       }
     },
-    emits: ['navigate'],
+    emits: ['navigate', 'closeBook'],
     setup(props, { emit }) {
       const expandedItems = ref({});
       const contentContainer = ref(null);
@@ -243,6 +256,10 @@
         emit('navigate', href);
       };
 
+      const handleCloseBook = () => {
+        emit('closeBook');
+      };
+
       const scrollToActive = () => {
         const activeElement = contentContainer.value?.querySelector('.toc-link.active');
         if (activeElement) {
@@ -285,6 +302,7 @@
         handleExpandClick,
         handleItemClick,
         handleNavigate,
+        handleCloseBook,
         scrollToActive,
         onEnter,
         onLeave
@@ -302,43 +320,27 @@
     left: 0;
     top: 36px; /* Height of header toolbar */
     transform: translateX(-100%);
-      .sidebar-resizer {
-        position: absolute;
-        right: 0;
-        top: 0;
-        bottom: 0;
-        width: 6px;
-        cursor: col-resize;
-        background: transparent;
-      }
     transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), 
                 box-shadow 0.35s cubic-bezier(0.4, 0, 0.2, 1);
     z-index: 100;
-    overflow-y: auto;
     border-right: 2px solid var(--toolbar-sp-color, #6a666687);
     box-shadow: none;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(128, 128, 128, 0.4) transparent;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* Change from overflow-y: auto to hidden */
   }
 
-  /* Webkit scrollbar styling */
-  .sidebar::-webkit-scrollbar {
+  .sidebar-resizer {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
     width: 6px;
-  }
-
-  .sidebar::-webkit-scrollbar-track {
+    cursor: col-resize;
     background: transparent;
+    z-index: 2;
   }
 
-  .sidebar::-webkit-scrollbar-thumb {
-    background: rgba(128, 128, 128, 0.4);
-    border-radius: 3px;
-  }
-
-  .sidebar::-webkit-scrollbar-thumb:hover {
-    background: rgba(128, 128, 128, 0.6);
-  }
-  
   .sidebar.open {
     transform: translateX(0);
     box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15);
@@ -351,6 +353,7 @@
     position: sticky;
     top: 0;
     z-index: 1;
+    flex-shrink: 0; /* Prevent header from shrinking */
   }
   
   .sidebar-header h3 {
@@ -360,8 +363,70 @@
   }
   
   .sidebar-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    min-height: 0; /* Important for flex child to respect parent constraints */
+    scrollbar-width: thin;
+    scrollbar-color: rgba(128, 128, 128, 0.4) transparent;
+  }
+
+  /* Webkit scrollbar styling for sidebar-content */
+  .sidebar-content::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .sidebar-content::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .sidebar-content::-webkit-scrollbar-thumb {
+    background: rgba(128, 128, 128, 0.4);
+    border-radius: 3px;
+  }
+
+  .sidebar-content::-webkit-scrollbar-thumb:hover {
+    background: rgba(128, 128, 128, 0.6);
+  }
+
+  .toc-wrapper {
+    flex: 1;
     padding: 10px 0;
+  }
+
+  .sidebar-footer {
+    padding: 16px;
     padding-bottom: 50px;
+    border-top: 1px solid var(--toolbar-sp-color, #6a666687);
+    flex-shrink: 0; /* Prevent footer from shrinking */
+    background-color: var(--sidebar-bg-color, #d4d4d7); /* Match sidebar background */
+  }
+
+  .close-book-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px 16px;
+    background-color: var(--close-btn-bg, #f3f4f6);
+    color: var(--close-btn-color, #4b5563);
+    border: 1px solid var(--close-btn-border, #e5e7eb);
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .close-book-btn:hover {
+    background-color: var(--close-btn-hover-bg, #e5e7eb);
+    border-color: var(--close-btn-hover-border, #d1d5db);
+  }
+
+  .close-book-btn:active {
+    transform: scale(0.98);
   }
 
   .empty-state {
@@ -569,6 +634,17 @@
       top: 32px;
     }
   }
+
+  /* Light mode - can keep red or customize differently */
+  @media (prefers-color-scheme: light) {
+    .close-book-btn {
+      --close-btn-bg: rgba(239, 68, 68, 0.1);
+      --close-btn-color: #ef4444;
+      --close-btn-border: rgba(239, 68, 68, 0.3);
+      --close-btn-hover-bg: rgba(239, 68, 68, 0.2);
+      --close-btn-hover-border: rgba(239, 68, 68, 0.5);
+    }
+  }
   
   @media (prefers-color-scheme: dark) {
     .sidebar {
@@ -584,6 +660,18 @@
     
     .sidebar.open {
       box-shadow: 2px 0 8px rgba(0, 0, 0, 0.3);
+    }
+
+    .close-book-btn {
+      --close-btn-bg: #3a3a40;
+      --close-btn-color: #e5e7eb;
+      --close-btn-border: #4b4b55;
+      --close-btn-hover-bg: #4b4b55;
+      --close-btn-hover-border: #6b6b75;
+    }
+
+    .sidebar-footer {
+      border-top-color: #3a3a40;
     }
   }
 </style>
