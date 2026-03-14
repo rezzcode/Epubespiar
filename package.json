@@ -1,0 +1,40 @@
+{
+  "name": "epubespiar",
+  "private": true,
+  "version": "0.3.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --config vite.dev.js",
+    "build:manifest": "node scripts/build-manifest.js",
+    "build:assets": "node scripts/copy-assets.js",
+    "build:e-handler": "node scripts/e-handler.js",
+    "build:content": "vite build --config vite.content.config.js",
+    "build:chrome": "cross-env BROWSER=chrome vite build",
+    "build:firefox": "cross-env BROWSER=firefox vite build",
+    "prebuild:prod": "node scripts/increment-version.js && pnpm build:assets",
+    "build:prod": "pnpm build:chrome && pnpm build:firefox && pnpm build:content && pnpm build:e-handler && pnpm build:manifest",
+    "prebuild": "pnpm build:assets",
+    "build": "pnpm build:content && pnpm build:chrome && pnpm build:firefox && pnpm build:e-handler && pnpm build:manifest",
+    "preview": "vite preview",
+    "security-check": "pnpm audit && pnpm outdated"
+  },
+  "dependencies": {
+    "@vueuse/core": "^14.0.0",
+    "axios": "^1.7.9",
+    "core-js": "^3.8.3",
+    "dotenv": "^16.4.7",
+    "jszip": "^3.10.1",
+    "lodash.throttle": "^4.1.1",
+    "punycode": "^2.3.1",
+    "vue": "^3.4.21",
+    "vue-router": "^4.5.0",
+    "vuex": "^4.1.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.4",
+    "cross-env": "^7.0.3",
+    "vite": "^5.4.14",
+    "vite-plugin-web-extension": "^4.0.0",
+    "webextension-polyfill": "^0.10.0"
+  }
+}
