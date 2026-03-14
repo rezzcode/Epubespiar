@@ -22,7 +22,9 @@
     "@vueuse/core": "^14.0.0",
     "axios": "^1.7.9",
     "core-js": "^3.8.3",
+    "dompurify": "^3.3.1",
     "dotenv": "^16.4.7",
+    "epubjs": "^0.3.93",
     "jszip": "^3.10.1",
     "lodash.throttle": "^4.1.1",
     "punycode": "^2.3.1",
@@ -31,9 +33,10 @@
     "vuex": "^4.1.0"
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "^5.0.4",
+    "@vitejs/plugin-vue": "^6.0.4",
     "cross-env": "^7.0.3",
-    "vite": "^5.4.14",
+    "sass": "^1.97.1",
+    "vite": "^7.3.1",
     "vite-plugin-web-extension": "^4.0.0",
     "webextension-polyfill": "^0.10.0"
   }
