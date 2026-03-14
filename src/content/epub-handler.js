@@ -45,13 +45,13 @@ document.addEventListener('dragstart', async (event) => {
 
 // Handle drop events securely
 document.addEventListener('drop', async (event) => {
-  event.preventDefault();
-  event.stopPropagation();
-
   const url = event.dataTransfer.getData('text/uri-list') || 
               event.dataTransfer.getData('text/plain');
 
   if (isValidEpubUrl(url)) {
+    event.preventDefault();
+    event.stopPropagation();
+
     try {
       await browser.runtime.sendMessage({
         type: 'EPUB_DROP',
