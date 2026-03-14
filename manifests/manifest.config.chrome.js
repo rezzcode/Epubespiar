@@ -23,7 +23,7 @@ const chromeManifest = {
   },
   content_security_policy: {
     extension_pages: "script-src 'self'; object-src 'self'; style-src 'self' 'unsafe-inline'",
-    sandbox: "sandbox allow-scripts allow-forms allow-popups allow-modals; script-src 'self' 'unsafe-inline' 'unsafe-eval'; child-src 'self';"
+    sandbox: "sandbox allow-scripts allow-forms allow-popups allow-modals; script-src 'self' 'unsafe-inline'; child-src 'self';"
   },
 };
 
