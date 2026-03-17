@@ -15,7 +15,7 @@ const baseManifest = {
   name: "Epubespiar",
   version,
   manifest_version: 3,
-  description: "A browser extension that allows you to read EPUB books right in your browser",
+  description: "Epubespiar is a browser extension that allows you to read EPUB books right in your browser",
   action: {
     default_title: "Epubespiar"
   },
