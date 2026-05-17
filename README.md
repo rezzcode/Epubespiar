@@ -12,6 +12,8 @@ A powerful browser extension for reading EPUB books directly in your browser wit
 - **Zoom Controls**: Adjust view widths for comfortable reading
 - **Font Controls**: Adjust text size for comfortable reading
 - **Responsive Design**: Works great on desktop and mobile devices
+- **Epub URL Intercepts**: toggle on and off to open epub books automatically from URLs
+- **Progress Tracking**: Through percentage
 
 ### 🎯 Smart Interactions
 - **Drag & Drop**: Drop EPUB files onto the reader to open immediately and add to the library
@@ -66,7 +68,7 @@ https://github.com/user-attachments/assets/ca7e83c9-84d9-4d01-ac6f-1a946fbaeda7
 ## Technical Stack
 
 - **Vue 3**: Modern reactive framework for UI
-- **epub.js**: EPUB parsing and rendering
+- **jszip.js**: EPUB parsing and rendering
 - **CSS3 & SCSS**: For great styling
 - **Vite**: Fast build tool and development server
 - **Manifest V3**: Latest Chrome extension API
@@ -131,6 +133,4 @@ When detected, it redirects to the extensions reader page, where you can read th
 ## What's not Implemented
 
 - [ ] Epub book library
-- [ ] Progress Tracking
-- [ ] Url intercepts
 - [ ] What you thought was but is not while using the extension
