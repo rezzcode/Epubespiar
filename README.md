@@ -56,8 +56,8 @@ https://github.com/user-attachments/assets/ca7e83c9-84d9-4d01-ac6f-1a946fbaeda7
              ▼
 ╭────────────────────────────╮
 │       READER.HTML          │
-│ uses epub.js to render     │
-│ fetches the .epub via URL  │
+│ uses renders or fetches    │
+│ the .epub via URL          │
 │ displays in tab like PDF   │
 │ See reading progress %     │
 ╰────────────────────────────╯
