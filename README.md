@@ -133,5 +133,6 @@ When detected, it redirects to the extensions reader page, where you can read th
 ## What's not Implemented
 
 - [ ] Epub book library
+- [ ] Syntax highlighting
 - [ ] Download status: This shows the progress of your download
 - [ ] What you thought was but is not while using the extension
