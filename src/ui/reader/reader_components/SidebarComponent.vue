@@ -13,7 +13,7 @@
               :key="`chapter-${index}`" 
               class="toc-item"
               :class="{ 
-                expanded: expandedItems[index]
+                expanded: isExpanded(item, index)
               }"
             >
               <div class="toc-item-content">
@@ -21,6 +21,7 @@
                   class="toc-link"
                   :class="{ 
                     active: isExactActiveItem(item.href),
+                    'active-parent': !isExactActiveItem(item.href) && hasActiveDescendant(item),
                     'has-subitems': item.subitems && item.subitems.length > 0
                   }"
                   @click.stop="handleItemClick(item, index)"
@@ -29,21 +30,25 @@
                   <span 
                     v-if="item.subitems && item.subitems.length > 0" 
                     class="expand-icon"
-                    @click.stop="handleExpandClick(index)"
+                    @click.stop="handleExpandClick(item, index)"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
                       <path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/>
                     </svg>
                   </span>
                   <span class="toc-label">{{ item.label }}</span>
-                  <span v-if="isExactActiveItem(item.href)" class="active-indicator"></span>
+                  <span
+                    v-if="isExactActiveItem(item.href) || hasActiveDescendant(item)"
+                    class="active-indicator"
+                    :class="{ 'active-parent-indicator': !isExactActiveItem(item.href) && hasActiveDescendant(item) }"
+                  ></span>
                 </button>
               </div>
 
               <!-- Nested subitems -->
               <transition name="expand" @enter="onEnter" @leave="onLeave">
                 <ul 
-                  v-if="item.subitems && item.subitems.length > 0 && expandedItems[index]" 
+                  v-if="item.subitems && item.subitems.length > 0 && isExpanded(item, index)" 
                   class="toc-sublist"
                 >
                   <li 
@@ -142,25 +147,82 @@
         window.removeEventListener('mouseup', stopResizing);
       };
 
+      const normalizeHref = (href) => String(href || '').trim();
+      const getItemKey = (item, index) => normalizeHref(item?.href) || `toc-item-${index}`;
+
+      const isActive = (itemHref, currentChapter = props.currentChapter) => {
+        if (!currentChapter || !itemHref) return false;
+        const normalizedItem = normalizeHref(itemHref);
+        const normalizedCurrent = normalizeHref(currentChapter);
+
+        if (normalizedItem === normalizedCurrent) return true;
+
+        const itemBase = normalizedItem.split('#')[0];
+        const currentBase = normalizedCurrent.split('#')[0];
+
+        // Keep base-url matching for chapter-level highlighting while reading
+        return itemBase && itemBase === currentBase;
+      };
+
+      const hasActiveDescendant = (item, currentChapter = props.currentChapter) => {
+        if (!item?.subitems?.length) return false;
+        return item.subitems.some((subitem) => {
+          if (isActive(subitem.href, currentChapter)) return true;
+          return hasActiveDescendant(subitem, currentChapter);
+        });
+      };
+
+      const expandParentsForActiveChapter = (chapter = props.currentChapter) => {
+        const expandAncestors = (items = [], ancestors = []) => {
+          items.forEach((item, index) => {
+            const key = getItemKey(item, index);
+            const currentAncestors = [...ancestors, key];
+            const currentIsActive = isActive(item?.href, chapter);
+            const descendantIsActive = hasActiveDescendant(item, chapter);
+
+            if (currentIsActive || descendantIsActive) {
+              currentAncestors.forEach((ancestorKey) => {
+                expandedItems.value[ancestorKey] = true;
+              });
+            }
+
+            if (item?.subitems?.length) {
+              expandAncestors(item.subitems, currentAncestors);
+            }
+          });
+        };
+
+        expandAncestors(props.toc, []);
+      };
+
+      const isExpanded = (item, index) => {
+        const key = getItemKey(item, index);
+        return Boolean(expandedItems.value[key]);
+      };
+
+      const toggleExpanded = (item, index) => {
+        if (item?.subitems && item.subitems.length > 0) {
+          const key = getItemKey(item, index);
+          expandedItems.value[key] = !expandedItems.value[key];
+        }
+      };
+
       // Initialize first item as expanded
       watch(() => props.toc, (newToc) => {
-        if (newToc.length > 0 && Object.keys(expandedItems.value).length === 0) {
-          expandedItems.value[0] = true;
+        expandedItems.value = {};
+        if (newToc.length > 0) {
+          const firstKey = getItemKey(newToc[0], 0);
+          expandedItems.value[firstKey] = true;
+        }
+        if (props.currentChapter) {
+          expandParentsForActiveChapter(props.currentChapter);
         }
       }, { immediate: true });
 
       // Auto-expand and scroll to active item
       watch(() => props.currentChapter, async (newChapter) => {
         if (newChapter) {
-          // Find and expand parent chapter containing active item
-          props.toc.forEach((item, index) => {
-            if (item.subitems && item.subitems.length > 0) {
-              const hasActiveSubitem = item.subitems.some(sub => isActive(sub.href, newChapter));
-              if (hasActiveSubitem) {
-                expandedItems.value[index] = true;
-              }
-            }
-          });
+          expandParentsForActiveChapter(newChapter);
           
           // Scroll to active item if sidebar is open
           if (props.isOpen) {
@@ -173,18 +235,7 @@
       // Watch for sidebar open state to trigger scroll and expansion
       watch(() => props.isOpen, async (isOpen) => {
         if (isOpen && props.currentChapter) {
-          // Auto-expand the parent chapter of current location
-          props.toc.forEach((item, index) => {
-            // Check if current chapter is this item or its subitem
-            const isCurrentItem = isActive(item.href, props.currentChapter);
-            const hasActiveSubitem = item.subitems?.some(sub => 
-              isActive(sub.href, props.currentChapter)
-            );
-            
-            if ((isCurrentItem || hasActiveSubitem) && item.subitems && item.subitems.length > 0) {
-              expandedItems.value[index] = true;
-            }
-          });
+          expandParentsForActiveChapter(props.currentChapter);
 
           // Scroll to the active item after expansion
           await nextTick();
@@ -204,50 +255,25 @@
       // Only return true for exact href match, no parent matching
       const isExactActiveItem = (itemHref, currentChapter = props.currentChapter) => {
         if (!currentChapter || !itemHref) return false;
-        const normalizedItem = String(itemHref).trim();
-        const normalizedCurrent = String(currentChapter).trim();
+        const normalizedItem = normalizeHref(itemHref);
+        const normalizedCurrent = normalizeHref(currentChapter);
         return normalizedItem === normalizedCurrent;
       };
 
-      const isActive = (itemHref, currentChapter = props.currentChapter) => {
-        if (!currentChapter || !itemHref) return false;
-        // Exact match including hash for precise subtopic tracking
-        const normalizedItem = String(itemHref).trim();
-        const normalizedCurrent = String(currentChapter).trim();
-        
-        // First check for exact match (including hash)
-        if (normalizedItem === normalizedCurrent) return true;
-        
-        // If no exact match, check base URL (without hash) only if current has no hash
-        // This prevents parent chapters from being highlighted when on a subtopic
-        if (!normalizedCurrent.includes('#')) {
-          const itemBase = normalizedItem.split('#')[0];
-          const currentBase = normalizedCurrent.split('#')[0];
-          return itemBase === currentBase;
-        }
-        
-        return false;
-      };
-
-      const toggleExpanded = (index) => {
-        if (props.toc[index].subitems && props.toc[index].subitems.length > 0) {
-          expandedItems.value[index] = !expandedItems.value[index];
-        }
-      };
-
       // Handle expand icon click - only expand/collapse, no navigation
-      const handleExpandClick = (index) => {
-        toggleExpanded(index);
+      const handleExpandClick = (item, index) => {
+        toggleExpanded(item, index);
       };
 
-      // Handle main item click - expand if has subitems, navigate if subitem or childless parent
+      // Handle main item click: toggle expansion for parents and navigate when href exists
       const handleItemClick = (item, index) => {
         const hasSubitems = item.subitems && item.subitems.length > 0;
         if (hasSubitems) {
-          // Only expand/collapse, don't navigate
-          toggleExpanded(index);
-        } else {
-          // No subitems, so navigate to this item
+          // Toggle section visibility and navigate to parent chapter location
+          toggleExpanded(item, index);
+        }
+
+        if (item.href) {
           handleNavigate(item.href);
         }
       };
@@ -298,6 +324,8 @@
         chaptersCount,
         isExactActiveItem,
         isActive,
+        hasActiveDescendant,
+        isExpanded,
         toggleExpanded,
         handleExpandClick,
         handleItemClick,
@@ -494,6 +522,13 @@
     border-left-color: var(--hover-outline-color, #10b981);
   }
 
+  .toc-link.active-parent {
+    background-color: var(--active-bg, rgba(16, 185, 129, 0.08));
+    color: var(--hover-outline-color, #10b981);
+    border-left-color: var(--hover-outline-color, #10b981);
+    opacity: 0.92;
+  }
+
   .toc-link.active::before {
     content: '';
     position: absolute;
@@ -510,7 +545,8 @@
   }
 
   .toc-link.has-subitems:not(.active) {
-    cursor: default;
+    /* Parent entries are navigable now, so keep pointer cursor for discoverability. */
+    cursor: pointer;
   }
 
   .toc-link.has-subitems:not(.active):hover {
@@ -548,13 +584,21 @@
 
   .active-indicator {
     display: inline-block;
-    width: 6px;
-    height: 6px;
+    width: 8px;
+    height: 8px;
     background: var(--hover-outline-color, #10b981);
     border-radius: 50%;
     flex-shrink: 0;
     animation: pulse 2s ease-in-out infinite;
     box-shadow: 0 0 6px rgba(16, 185, 129, 0.6);
+  }
+
+  .active-parent-indicator {
+    width: 6px;
+    height: 6px;
+    opacity: 0.8;
+    box-shadow: 0 0 4px rgba(16, 185, 129, 0.4);
+    animation: none;
   }
 
   @keyframes pulse {
