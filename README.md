@@ -126,13 +126,12 @@ When detected, it redirects to the extensions reader page, where you can read th
 
 ## Browser Compatibility
 
-- Chrome/Edge: Full support
-- Firefox: Full support
+- [Chrome](https://chromewebstore.google.com/detail/epubespiar/jpebliijmpohifmgjcpfmhfjjeingoho)/[Edge](https://microsoftedge.microsoft.com/addons/detail/mnlangghpjdaaecdfagjleijiahpaaei?hl=vi): Full support
+- [Firefox](https://addons.mozilla.org/en-GB/firefox/addon/epubespiar/): Full support
 - Other Chromium-based browsers: Should work with the Chrome build
 
 ## What's not Implemented
 
 - [ ] Epub book library
-- [ ] Syntax highlighting
 - [ ] Download status: This shows the progress of your download
 - [ ] What you thought was but is not while using the extension
