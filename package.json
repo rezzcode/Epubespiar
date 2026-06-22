@@ -1,7 +1,7 @@
 {
   "name": "epubespiar",
   "private": true,
-  "version": "0.4.0",
+  "version": "0.4.1",
   "type": "module",
   "scripts": {
     "dev": "vite --config vite.dev.js",
@@ -33,6 +33,7 @@
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.0.4",
     "cross-env": "^7.0.3",
+    "source-map-explorer": "^2.5.3",
     "vite": "^5.4.14",
     "vite-plugin-web-extension": "^4.0.0",
     "webextension-polyfill": "^0.10.0"
