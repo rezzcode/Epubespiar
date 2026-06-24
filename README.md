@@ -1,5 +1,4 @@
-# Epubespiar.
- - EPUB Reader Browser Extension
+# Epubespiar - EPUB Reader Extension
 
 A powerful browser extension for reading EPUB books directly in your browser with a beautiful library management system.
 
