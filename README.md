@@ -19,11 +19,9 @@ A powerful browser extension for reading EPUB books directly in your browser wit
 
 ### Get the extension
 
-||
-|-|
-|<a href="https://addons.mozilla.org/en-GB/firefox/addon/epubespiar/"><img width="172" height="60" alt="firefox_badge" src="https://github.com/user-attachments/assets/c2a7391f-eaf0-4507-b8bc-c331647116b1" /></a>
-|<a href="https://microsoftedge.microsoft.com/addons/detail/mnlangghpjdaaecdfagjleijiahpaaei?hl=vi"><img width="172" height="46" alt="edge_badge" src="https://github.com/user-attachments/assets/ecc90e27-1092-4c3e-9b04-31895b2dc137" /></a>
-|<a href="https://chromewebstore.google.com/detail/epubespiar/jpebliijmpohifmgjcpfmhfjjeingoho"><img width="172" height="52" alt="chrome_badge" src="https://github.com/user-attachments/assets/76294ed1-9228-4de7-8d31-41675d838a88" /></a>
+| Firefox | Edge | Chrome |
+|-|-|-|
+|<a href="https://addons.mozilla.org/en-GB/firefox/addon/epubespiar/"><img width="172" height="60" alt="firefox_badge" src="https://github.com/user-attachments/assets/c2a7391f-eaf0-4507-b8bc-c331647116b1" /></a> |<a href="https://microsoftedge.microsoft.com/addons/detail/mnlangghpjdaaecdfagjleijiahpaaei?hl=vi"><img width="172" height="46" alt="edge_badge" src="https://github.com/user-attachments/assets/ecc90e27-1092-4c3e-9b04-31895b2dc137" /></a> |<a href="https://chromewebstore.google.com/detail/epubespiar/jpebliijmpohifmgjcpfmhfjjeingoho"><img width="172" height="52" alt="chrome_badge" src="https://github.com/user-attachments/assets/76294ed1-9228-4de7-8d31-41675d838a88" /></a> |
 
 ### Getting Started
 
