@@ -12,7 +12,7 @@ const version = packageJson.version;
 
 // Base configuration shared between the browsers
 const baseManifest = {
-  name: "Epubespiar",
+  name: "Epubespiar - Epub reader",
   version,
   manifest_version: 3,
   description: "Epubespiar is a browser extension that allows you to read EPUB books right in your browser",
