@@ -135,3 +135,7 @@ When detected, it redirects to the extensions reader page, where you can read th
 - [ ] Epub book library
 - [ ] Download status: This shows the progress of your download
 - [ ] What you thought was but is not while using the extension
+
+
+
+\\\\\\\\\\\\\
