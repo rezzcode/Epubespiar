@@ -266,11 +266,14 @@ export default {
       return baseParts.join('/');
     };
 
+    const stripFontFaceRules = (cssText) => cssText.replace(/@font-face\s*{[\s\S]*?}/gi, '');
+
     const processCssUrls = async (cssText, zip, cssPath) => {
       const cssBasePath = cssPath.includes('/') ? cssPath.substring(0, cssPath.lastIndexOf('/')) : '';
       const urlPattern = /url\(['"]?([^'")]+)['"]?\)/g;
-      const matches = [...cssText.matchAll(urlPattern)];
-      let updated = cssText;
+      const cssWithoutFontFaces = stripFontFaceRules(cssText);
+      const matches = [...cssWithoutFontFaces.matchAll(urlPattern)];
+      let updated = cssWithoutFontFaces;
 
       for (const match of matches) {
         const original = match[1];
@@ -575,6 +578,18 @@ export default {
             : '';
           const content = await parseAndProcessChapter(rawContent, zip, chapterBasePath);
 
+          // Extract styles and body content to preserve original layout and colors
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(content, 'text/html');
+          const styles = doc.querySelectorAll('style, link[rel="stylesheet"]');
+          let stylesHtml = '';
+          styles.forEach((style) => {
+            stylesHtml += style.outerHTML;
+          });
+
+          const bodyNode = doc.querySelector('body');
+          const bodyHtml = bodyNode ? bodyNode.innerHTML : content;
+
           const chapterFileName = spineItem.href.split('/').pop() || spineItem.href;
           const matchingToc = flatParsedToc.find((item) => {
             const tocFile = item.href.split('#')[0].split('/').pop();
@@ -585,7 +600,9 @@ export default {
             index,
             href: spineItem.href,
             title: matchingToc?.label || `Section ${index + 1}`,
-            content
+            content,
+            styles: stylesHtml,
+            body: bodyHtml
           });
         } catch (error) {
           console.error(`Failed to parse chapter ${index}:`, error);

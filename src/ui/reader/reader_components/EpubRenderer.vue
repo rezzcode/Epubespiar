@@ -34,17 +34,19 @@
           class="chapter-section"
           :ref="(el) => setChapterRef(index, el)"
         >
-          <header class="chapter-header">
+          <!----- header class="chapter-header">
             <h2>{{ chapter.title }}</h2>
-          </header>
+            // TODO: This section is commented so that we dont have duplicate headers
+            // but in future we would like to make it a fallback for books that
+            // do not have chapter headers (title)
+          </header ----->
 
-          <div
-            class="chapter-content"
-            :style="{ fontSize: `${fontSize}px`, lineHeight: 1.7 }"
-          >
-            <div v-html="chapter.styles" style="display: none;"></div>
-            <div v-html="getHighlightedChapterContent(chapter)"></div>
-          </div>
+          <chapter-content
+            data-shadow-host="chapter-content"
+            :book-styles="chapter.styles"
+            :content-html="getHighlightedChapterContent(chapter)"
+            :font-size="fontSize"
+          />
 
           <div v-if="index !== chapters.length - 1" class="chapter-divider">•••</div>
         </article>
@@ -56,8 +58,12 @@
 
 <script>
 import { ref, nextTick, watch } from 'vue';
+import ChapterContent from './ChapterContent.vue';
 
 export default {
+  components: {
+    ChapterContent
+  },
   props: {
     isLoading: { type: Boolean, default: false },
     isBookLoaded: { type: Boolean, default: false },
@@ -178,8 +184,17 @@ export default {
 
       if (fragment) {
         setTimeout(() => {
-          const fragmentEl = chapterEl.querySelector(`#${CSS.escape(fragment)}`)
+          let fragmentEl = chapterEl.querySelector(`#${CSS.escape(fragment)}`)
             || chapterEl.querySelector(`[name="${fragment}"]`);
+          if (!fragmentEl) {
+            const shadowHosts = chapterEl.querySelectorAll('[data-shadow-host="chapter-content"]');
+            for (const host of Array.from(shadowHosts)) {
+              const shadowRoot = host.shadowRoot;
+              fragmentEl = shadowRoot?.querySelector(`#${CSS.escape(fragment)}`)
+                || shadowRoot?.querySelector(`[name="${fragment}"]`);
+              if (fragmentEl) break;
+            }
+          }
           if (fragmentEl) {
             fragmentEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
           }
@@ -188,7 +203,9 @@ export default {
     };
 
     const handleContentClick = (event) => {
-      const anchor = event.target.closest('a');
+      const eventPath = typeof event.composedPath === 'function' ? event.composedPath() : [];
+      const anchorFromPath = eventPath.find((node) => node?.tagName === 'A');
+      const anchor = anchorFromPath || event.target.closest?.('a');
       if (!anchor) return;
 
       const href = anchor.getAttribute('href');
@@ -199,7 +216,9 @@ export default {
 
       event.preventDefault();
 
-      const chapterRoot = event.target.closest('[data-chapter-index]');
+          const chapterRoot = eventPath.find((node) =>
+            typeof node?.getAttribute === 'function' && node.getAttribute('data-chapter-index') !== null
+          ) || event.target.closest?.('[data-chapter-index]');
       const chapterIndex = chapterRoot ? Number(chapterRoot.getAttribute('data-chapter-index')) : 0;
       emit('navigate-internal', { href, chapterIndex });
     };

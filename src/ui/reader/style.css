@@ -122,7 +122,7 @@ body {
   font-size: 0.9em;
   margin: 1.2em 0;
   line-height: 1.5;
-  background-color: #f6f8fa;
+  background-color: var(--background-color, #f6f8fa);
   border: 1px solid var(--border-color, #d1d5db);
 }
 
