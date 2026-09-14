@@ -33,6 +33,10 @@ function isObject(value) {
 	return value !== null && value instanceof Object && !Array.isArray(value);
 }
 
+function isEmptyObject(value) {
+	return isObject(value) && Object.keys(value).length === 0;
+}
+
 export function useBrowserSyncStorage(key, defaultValue) {
 	return useBrowserStorage(key, defaultValue, "sync");
 }
@@ -61,7 +65,7 @@ function useBrowserStorage(key, defaultValue, storageType = "sync") {
 				if (stored !== null) {
 					const parsed = JSON.parse(stored);
 					if (defaultIsObject && isObject(parsed)) {
-						data.value = mergeDeep(defaultValue, parsed);
+						data.value = isEmptyObject(defaultValue) ? parsed : mergeDeep(defaultValue, parsed);
 					} else if (checkType(defaultValue, parsed)) {
 						data.value = parsed;
 					}
@@ -101,7 +105,7 @@ function useBrowserStorage(key, defaultValue, storageType = "sync") {
 		chrome.storage[storageType].get(key, async (result) => {
 			if (result?.[key] !== undefined) {
 				if (defaultIsObject && isObject(result[key])) {
-					data.value = mergeDeep(defaultValue, result[key]);
+					data.value = isEmptyObject(defaultValue) ? result[key] : mergeDeep(defaultValue, result[key]);
 				} else if (checkType(defaultValue, result[key])) {
 					data.value = result[key];
 				}
