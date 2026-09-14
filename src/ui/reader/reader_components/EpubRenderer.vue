@@ -41,11 +41,14 @@
           <div
             class="chapter-content"
             :style="{ fontSize: `${fontSize}px`, lineHeight: 1.7 }"
-            v-html="extractBodyContent(chapter.content)"
-          ></div>
+          >
+            <div v-html="chapter.styles" style="display: none;"></div>
+            <div v-html="getHighlightedChapterContent(chapter)"></div>
+          </div>
 
           <div v-if="index !== chapters.length - 1" class="chapter-divider">•••</div>
         </article>
+        <div class="chapter-divider">••• The End •••</div>
       </div>
     </div>
   </div>
@@ -113,6 +116,59 @@ export default {
       return bodyMatch ? bodyMatch[1] : html;
     };
 
+    const escapeHtml = (value) => value
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+
+    const highlightCode = (codeText) => {
+      const placeholders = [];
+      const storeToken = (tokenClass) => (match) => {
+        const placeholder = `__TOKEN_${placeholders.length}__`;
+        placeholders.push(`<span class="syntax-${tokenClass}">${match}</span>`);
+        return placeholder;
+      };
+
+      const keywordPattern = /\b(?:if|else|for|while|do|switch|case|default|break|continue|return|try|catch|finally|throw|new|class|function|const|let|var|import|export|from|as|public|private|protected|static|async|await|true|false|null|undefined|this|super)\b/g;
+      const builtinPattern = /\b(?:print|printf|console|log|warn|error|len|size|map|filter|reduce|push|pop|shift|unshift|join|split|parseInt|parseFloat|Math|Date|String|Number|Boolean|Array|Object|Set|Map|Promise)\b/g;
+
+      let highlighted = escapeHtml(codeText);
+      highlighted = highlighted.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*|#[^\n]*/g, storeToken('comment'));
+      highlighted = highlighted.replace(/"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`/g, storeToken('string'));
+      highlighted = highlighted.replace(/\b(?:0x[a-fA-F0-9]+|\d*\.?\d+(?:[eE][+-]?\d+)?)\b/g, storeToken('number'));
+      highlighted = highlighted.replace(keywordPattern, storeToken('keyword'));
+      highlighted = highlighted.replace(builtinPattern, storeToken('builtin'));
+
+      placeholders.forEach((token, index) => {
+        highlighted = highlighted.replaceAll(`__TOKEN_${index}__`, token);
+      });
+
+      return highlighted;
+    };
+
+    const highlightCodeBlocks = (html) => {
+      if (!html || (!html.includes('<code') && !html.includes('<pre'))) {
+        return html || '';
+      }
+
+      const container = document.createElement('div');
+      container.innerHTML = html;
+
+      container.querySelectorAll('pre code, code').forEach((node) => {
+        const content = node.textContent || '';
+        if (!content.trim()) return;
+        node.innerHTML = highlightCode(content);
+        node.classList.add('syntax-highlighted');
+      });
+
+      return container.innerHTML;
+    };
+
+    const getHighlightedChapterContent = (chapter) => {
+      const rawContent = chapter.body || extractBodyContent(chapter.content);
+      return highlightCodeBlocks(rawContent);
+    };
+
     const scrollToChapter = (index, fragment = null) => {
       const container = bookContent.value;
       const chapterEl = chapterRefs.value.get(index);
@@ -173,6 +229,7 @@ export default {
       bookContent,
       setChapterRef,
       extractBodyContent,
+      getHighlightedChapterContent,
       handleScroll,
       handleContentClick
     };
