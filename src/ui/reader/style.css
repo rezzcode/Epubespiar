@@ -110,3 +110,182 @@ body {
   display: inline-flex;
   vertical-align: middle;
 }
+
+/* --- EPUB Styles Preservation & Dark Mode Overrides --- */
+
+/* Default code styling in light mode */
+.chapter-content pre {
+  padding: 12px 16px;
+  border-radius: 6px;
+  overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.9em;
+  margin: 1.2em 0;
+  line-height: 1.5;
+  background-color: #f6f8fa;
+  border: 1px solid var(--border-color, #d1d5db);
+}
+
+.chapter-content code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.9em;
+  padding: 2px 4px;
+  background-color: rgba(175, 184, 193, 0.2);
+  border-radius: 4px;
+}
+
+.chapter-content pre code {
+  padding: 0;
+  background-color: transparent;
+  border-radius: 0;
+}
+
+.chapter-content .syntax-comment {
+  color: #6a737d;
+  font-style: italic;
+}
+
+.chapter-content .syntax-string {
+  color: #0a7d45;
+}
+
+.chapter-content .syntax-number {
+  color: #005cc5;
+}
+
+.chapter-content .syntax-keyword {
+  color: #d73a49;
+  font-weight: 600;
+}
+
+.chapter-content .syntax-builtin {
+  color: #6f42c1;
+}
+
+/* Dark mode EPUB content overrides - ensure readable text on dark background */
+@media (prefers-color-scheme: dark) {
+  .chapter-content,
+  .chapter-content * {
+    background-color: transparent !important;
+  }
+
+  .chapter-content,
+  .chapter-content p,
+  .chapter-content span,
+  .chapter-content div,
+  .chapter-content li,
+  .chapter-content td,
+  .chapter-content th,
+  .chapter-content h1,
+  .chapter-content h2,
+  .chapter-content h3,
+  .chapter-content h4,
+  .chapter-content h5,
+  .chapter-content h6 {
+    color: var(--text-color, #f5f5f5) !important;
+  }
+
+  /* Keep images, SVGs, and media backgrounds preserved */
+  .chapter-content img,
+  .chapter-content svg,
+  .chapter-content video,
+  .chapter-content canvas {
+    background-color: initial !important;
+  }
+
+  .chapter-content a {
+    color: var(--epub-text-color, #e89c30) !important;
+  }
+
+  /* Default code background in dark mode */
+  .chapter-content pre {
+    background-color: #1e1e1e !important;
+    border-color: #38383d !important;
+  }
+  
+  .chapter-content code {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+  }
+
+  .chapter-content .syntax-comment {
+    color: #8b949e !important;
+  }
+
+  .chapter-content .syntax-string {
+    color: #7ee787 !important;
+  }
+
+  .chapter-content .syntax-number {
+    color: #79c0ff !important;
+  }
+
+  .chapter-content .syntax-keyword {
+    color: #ff7b72 !important;
+  }
+
+  .chapter-content .syntax-builtin {
+    color: #d2a8ff !important;
+  }
+}
+
+/* Override styling when html has data-theme="dark" attribute */
+html[data-theme="dark"] .chapter-content,
+html[data-theme="dark"] .chapter-content * {
+  background-color: transparent !important;
+}
+
+html[data-theme="dark"] .chapter-content,
+html[data-theme="dark"] .chapter-content p,
+html[data-theme="dark"] .chapter-content span,
+html[data-theme="dark"] .chapter-content div,
+html[data-theme="dark"] .chapter-content li,
+html[data-theme="dark"] .chapter-content td,
+html[data-theme="dark"] .chapter-content th,
+html[data-theme="dark"] .chapter-content h1,
+html[data-theme="dark"] .chapter-content h2,
+html[data-theme="dark"] .chapter-content h3,
+html[data-theme="dark"] .chapter-content h4,
+html[data-theme="dark"] .chapter-content h5,
+html[data-theme="dark"] .chapter-content h6 {
+  color: var(--text-color, #f5f5f5) !important;
+}
+
+html[data-theme="dark"] .chapter-content img,
+html[data-theme="dark"] .chapter-content svg,
+html[data-theme="dark"] .chapter-content video,
+html[data-theme="dark"] .chapter-content canvas {
+  background-color: initial !important;
+}
+
+html[data-theme="dark"] .chapter-content a {
+  color: var(--epub-text-color, #e89c30) !important;
+}
+
+html[data-theme="dark"] .chapter-content pre {
+  background-color: #1e1e1e !important;
+  border-color: #38383d !important;
+}
+
+html[data-theme="dark"] .chapter-content code {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+html[data-theme="dark"] .chapter-content .syntax-comment {
+  color: #8b949e !important;
+}
+
+html[data-theme="dark"] .chapter-content .syntax-string {
+  color: #7ee787 !important;
+}
+
+html[data-theme="dark"] .chapter-content .syntax-number {
+  color: #79c0ff !important;
+}
+
+html[data-theme="dark"] .chapter-content .syntax-keyword {
+  color: #ff7b72 !important;
+}
+
+html[data-theme="dark"] .chapter-content .syntax-builtin {
+  color: #d2a8ff !important;
+}
