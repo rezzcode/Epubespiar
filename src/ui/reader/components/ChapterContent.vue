@@ -35,6 +35,12 @@ const renderShadowContent = () => {
 
   const darkModeStyles = isDarkMode.value
     ? `
+      /** Notes: This would make hylights made not to be visible
+       * I would figure something better though, now it does not trade colors in light mode.
+      **/
+      .chapter-content * {
+          background-color: transparent !important;
+      }
       .chapter-content,
       .chapter-content p,
       .chapter-content span,
@@ -101,16 +107,6 @@ const renderShadowContent = () => {
 
   const baseStyles = `
     <style>
-    /** Notes: I added this here because I had to trade between displaying white
-        backgrounds on dark mode which conflicts my text colours, or displaying
-        colourful whitish background on light mode.
-
-        At this you know what I choose.
-    **/
-    .chapter-content * {
-        background-color: transparent !important;
-    }
-
       .chapter-content {
         font-size: ${props.fontSize}px;
         line-height: 1.7;
