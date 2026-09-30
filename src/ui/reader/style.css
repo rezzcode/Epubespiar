@@ -150,16 +150,16 @@ body {
 }
 
 .chapter-content .syntax-number {
-  color: #005cc5;
+  color: #11f;
 }
 
 .chapter-content .syntax-keyword {
-  color: #d73a49;
+  color: #ff3145;
   font-weight: 600;
 }
 
 .chapter-content .syntax-builtin {
-  color: #6f42c1;
+  color: #823eff;
 }
 
 /* Dark mode EPUB content overrides - ensure readable text on dark background */
