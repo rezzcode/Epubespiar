@@ -455,7 +455,7 @@ export default {
   }
   
   /* Tablet and below: Hide sidebar text */
-  @media (max-width: 768px) {
+  @media (max-width: 842px) {
     .sidebar-text {
       display: none;
     }
@@ -486,7 +486,7 @@ export default {
   }
   
   /* Mobile: More compact layout */
-  @media (max-width: 480px) {
+  @media (max-width: 515px) {
     .header-toolbar {
       padding: 2px 5px;
       height: 32px; /* here the header was reduced so it affects the sidebar */
