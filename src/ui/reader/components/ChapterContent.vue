@@ -175,7 +175,12 @@ const renderShadowContent = () => {
     </style>
   `;
 
-  shadowRootRef.innerHTML = `${baseStyles}${props.bookStyles || ''}<div class="chapter-content">${props.contentHtml || ''}</div>`;
+  const fullHtml = `${baseStyles}${props.bookStyles || ''}<div class="chapter-content">${props.contentHtml || ''}</div>`;
+  const parsed = new DOMParser().parseFromString(fullHtml, 'text/html');
+  shadowRootRef.replaceChildren(
+    ...Array.from(parsed.head.childNodes),
+    ...Array.from(parsed.body.childNodes)
+  );
 };
 
 onMounted(() => {

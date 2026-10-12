@@ -152,22 +152,29 @@ export default {
       return highlighted;
     };
 
+    const fragmentFromHtml = (html) => {
+      const parsed = new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
+      const wrapper = parsed.body.firstElementChild;
+      const fragment = document.createDocumentFragment();
+      while (wrapper && wrapper.firstChild) fragment.appendChild(wrapper.firstChild);
+      return fragment;
+    };
+
     const highlightCodeBlocks = (html) => {
       if (!html || (!html.includes('<code') && !html.includes('<pre'))) {
         return html || '';
       }
 
-      const container = document.createElement('div');
-      container.innerHTML = html;
+      const doc = new DOMParser().parseFromString(html, 'text/html');
 
-      container.querySelectorAll('pre code, code').forEach((node) => {
+      doc.body.querySelectorAll('pre code, code').forEach((node) => {
         const content = node.textContent || '';
         if (!content.trim()) return;
-        node.innerHTML = highlightCode(content);
+        node.replaceChildren(fragmentFromHtml(highlightCode(content)));
         node.classList.add('syntax-highlighted');
       });
 
-      return container.innerHTML;
+      return doc.body.innerHTML;
     };
 
     const getHighlightedChapterContent = (chapter) => {
