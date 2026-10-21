@@ -9,11 +9,6 @@
           to="/"
           class="flex gap-2 items-center"
         >
-          <img
-            src="../../../public/icon/128.png"
-            alt="logo"
-            class="h-8 w-auto"
-          />
           <div class="text-base font-semibold">Epubespiar</div>
         </RouterLink>
       </div>
