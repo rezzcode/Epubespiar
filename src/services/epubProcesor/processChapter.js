@@ -53,8 +53,15 @@ export const parseAndProcessChapter = async (chapterContent, zip, basePath, crea
                 resolved,
                 createTrackedObjectUrl
             );
-            const cssBlob = new Blob([processedCss], { type: 'text/css' });
-            link.setAttribute('href', createTrackedObjectUrl(cssBlob));
+            /**
+             * Inline the CSS instead of linking a blob: URL.
+             * fixing the blocked blob stylesheets in firefox.
+             */
+            const styleTag = doc.createElement('style');
+            styleTag.textContent = processedCss;
+            const media = link.getAttribute('media');
+            if (media) styleTag.setAttribute('media', media);
+            link.replaceWith(styleTag);
         } catch (error) {
             console.warn('Unable to process stylesheet:', resolved, error);
         }
