@@ -27,48 +27,14 @@ A powerful browser extension for reading EPUB books directly in your browser wit
 
 https://github.com/user-attachments/assets/ca7e83c9-84d9-4d01-ac6f-1a946fbaeda7
 
-
 ## Architecture
 
-```pgsql
-╭────────────────────────────╮
-│        USER ACTION         │
-│  Click Extension Icon      │
-╰────────────┬───────────────╯
-             │ Opens reader page.
-             │
-             ▼
-╭────────────────────────────╮
-│        USER OPTIONS        │
-│  (drag-drop / open EPUB)   │
-╰────────────┬───────────────╯
-             │
-             ▼
-╭────────────────────────────╮
-│         BROWSER            │
-│ Fetch EPUB → detect MIME   │
-│ (application/epub+zip)     │
-╰────────────┬───────────────╯
-             │
-             ▼
-╭────────────────────────────╮
-│  EXT BACKGROUND SCRIPT     │
-│ webRequest.onHeadersReceived│
-│ → detects EPUB MIME or .epub│
-│ → redirects tab             │
-│     ↓                       │
-│ reader.html?file=<url>      │
-╰────────────┬───────────────╯
-             │
-             ▼
-╭────────────────────────────╮
-│       READER.HTML          │
-│ uses renders or fetches    │
-│ the .epub via URL          │
-│ displays in tab like PDF   │
-│ See reading progress %     │
-╰────────────────────────────╯
-```
+EPUB opening currently follows two real paths:
+
+1. **Normal-page drag/drop path (content script available)**  
+   Drag an EPUB URL onto a regular web page where `src/content/epub-handler.js` runs.
+2. **Browser download path (content script unavailable, e.g. `chrome://newtab`)**  
+   In built-in pages like New Tab, content scripts cannot run, so Chrome's normal navigation/download flow happens and the extension reacts through Downloads API listeners in `src/background/index.js`.
 
 ## Technical Stack
 
@@ -99,7 +65,7 @@ pnpm run build
 
 ## Usage
 
-### Instant Reading (EPUB Interception)
+### Instant Reading (EPUB Opening Flows)
 
 The extension automatically intercepts EPUB files anywhere in your browser, just like how browsers handle PDFs:
 
@@ -110,16 +76,40 @@ The extension automatically intercepts EPUB files anywhere in your browser, just
 > does not support drag-and-drop local files with the help of an extension, as it does for
 > videos, images, or PDF files
 
-1. **Click EPUB Links**: Click any `.epub` link on a website → Opens immediately in reader
-2. **Navigate to EPUB URLs**: Type or paste an EPUB URL → Opens automatically
-3. **Drag & Drop**: Drag an EPUB file to any browser tab → Opens and starts reading
-4. **Drag & Drop option 2**: Drag drop an EPUB file onto a browser icon → Opens and starts reading
+#### 1) Normal-page drag/drop flow
 
-**How it works**: The extension uses `declarativeNetRequest` to detect:
-- URLs ending in `.epub`
-- Content with MIME type `application/epub+zip` or `application/epub`
+When drag/drop happens on a normal page where the content script runs:
 
-When detected, it redirects to the extensions reader page, where you can read the document.
+- `src/content/epub-handler.js` reads dragged data from `text/uri-list` or `text/plain`.
+- It validates only `https:` and `file:` URLs that end in `.epub`.
+- On a valid drop, it prevents default browser drop behavior and sends `EPUB_DROP` to the background script.
+- `src/background/index.js` validates again, then opens:
+  - `reader.html?file=<encoded-epub-url>&instance=<id>`
+
+#### 2) Download interception flow
+
+When content scripts cannot run (for example `chrome://newtab`) or when browser download behavior is used:
+
+- `src/background/index.js` listens on `browser.downloads.onCreated` and `browser.downloads.onChanged`.
+- It detects EPUB candidates using URL, filename, or MIME type (`application/epub+zip`).
+- **Local file EPUBs (`file://...`)**: it cancels and erases the download, then opens the reader with the original `file://` URL.
+- **HTTPS downloads**: interception is only enabled when `storage.local.interceptDownloads === true`.
+
+This is **not** a hidden `chrome://newtab` file-drop API. It relies on normal Chrome navigation/download behavior plus the extension's Downloads API listeners.
+
+#### 3) Reader flow
+
+Both paths end by opening the extension reader with:
+
+- `reader.html?file=<encoded-epub-url>`
+
+### Use cases?
+
+- **Use Entry Point 2** when:
+  - You find an EPUB on a website and want to read it immediately
+  - You're continuing a book you've already started
+  - You receive an EPUB file and want quick access
+  - You want the book to open automatically (like PDFs)
 
 ## Features in Detail
 
@@ -135,8 +125,8 @@ When detected, it redirects to the extensions reader page, where you can read th
 - [Firefox](https://addons.mozilla.org/en-GB/firefox/addon/epubespiar/): Full support
 - Other Chromium-based browsers: Should work with the Chrome build
 
-## What's not Implemented
+## What's not implemented
 
 - [ ] Epub book library
 - [ ] Download status: This shows the progress of your download
-- [ ] What you thought was but is not while using the extension
+- [x] What you thought was, but is not, while using the extension
