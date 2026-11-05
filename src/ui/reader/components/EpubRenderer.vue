@@ -21,43 +21,45 @@
       v-else
       id="book-content"
       ref="bookContent"
-      :style="{ transform: `scale(${zoomLevel})` }"
       @scroll.passive="handleScroll"
       @click="handleContentClick"
     >
-      <div class="content-wrapper">
-        <article
-          v-for="(chapter, index) in chapters"
-          :key="chapter.href || index"
-          :data-chapter-index="index"
-          :id="`chapter-${index}`"
-          class="chapter-section"
-          :ref="(el) => setChapterRef(index, el)"
-        >
-          <!----- header class="chapter-header">
-            <h2>{{ chapter.title }}</h2>
-            // TODO: This section is commented so that we dont have duplicate headers
-            // but in future we would like to make it a fallback for books that
-            // do not have chapter headers (title)
-          </header ----->
+      <div class="zoom-space" :style="{ height: `${scaledContentHeight}px` }">
+        <div ref="contentWrapper" class="content-wrapper" :style="{ transform: `scale(${zoomLevel})`, '--chapter-page-height': `${viewportHeight / zoomLevel}px` }">
+          <article
+            v-for="(chapter, index) in chapters"
+            :key="chapter.href || index"
+            :data-chapter-index="index"
+            :id="`chapter-${index}`"
+            class="chapter-section"
+            :ref="(el) => setChapterRef(index, el)"
+          >
+            <!----- header class="chapter-header">
+              <h2>{{ chapter.title }}</h2>
+              // TODO: This section is commented so that we dont have duplicate headers
+              // but in future we would like to make it a fallback for books that
+              // do not have chapter headers (title)
+            </header ----->
 
-          <chapter-content
-            data-shadow-host="chapter-content"
-            :book-styles="chapter.styles"
-            :content-html="getHighlightedChapterContent(chapter)"
-            :font-size="fontSize"
-          />
+            <chapter-content
+              data-shadow-host="chapter-content"
+              :book-styles="chapter.styles"
+              :content-html="getHighlightedChapterContent(chapter)"
+              :font-size="fontSize"
+              :font-weight="fontWeight"
+              :font-family="fontFamily"
+            />
 
-          <div v-if="index !== chapters.length - 1" class="chapter-divider">•••</div>
-        </article>
-        <div class="chapter-divider">••• The End •••</div>
+            <div v-if="index === chapters.length - 1" class="chapter-divider">••• The End •••</div>
+          </article>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script>
-import { ref, nextTick, watch } from 'vue';
+import { ref, nextTick, watch, onBeforeUnmount } from 'vue';
 import ChapterContent from './ChapterContent.vue';
 
 export default {
@@ -69,6 +71,8 @@ export default {
     isBookLoaded: { type: Boolean, default: false },
     zoomLevel: { type: Number, default: 1 },
     fontSize: { type: Number, default: 16 },
+    fontWeight: { type: String, default: '400' },
+    fontFamily: { type: String, default: 'default' },
     chapters: { type: Array, default: () => [] }
   },
   emits: ['content-scroll', 'navigate-internal'],
@@ -76,6 +80,42 @@ export default {
     const rendererContainer = ref(null);
     const bookContent = ref(null);
     const chapterRefs = ref(new Map());
+    const contentWrapper = ref(null);
+    const scaledContentHeight = ref(0);
+    const viewportHeight = ref(0);
+    const viewportObserver = new ResizeObserver(() => {
+      viewportHeight.value = bookContent.value?.clientHeight || 0;
+    });
+    watch(bookContent, element => {
+      viewportObserver.disconnect();
+      if (element) viewportObserver.observe(element);
+      viewportHeight.value = element?.clientHeight || 0;
+    }, { flush: 'post' });
+    const updateContentHeight = () => {
+      scaledContentHeight.value = (contentWrapper.value?.offsetHeight || 0) * props.zoomLevel;
+    };
+    const contentObserver = new ResizeObserver(updateContentHeight);
+    watch(contentWrapper, element => {
+      contentObserver.disconnect();
+      if (element) contentObserver.observe(element);
+      updateContentHeight();
+    }, { flush: 'post' });
+    watch(() => props.zoomLevel, async () => {
+      updateContentHeight();
+      await nextTick();
+      handleScroll();
+    });
+    onBeforeUnmount(() => {
+      contentObserver.disconnect();
+      viewportObserver.disconnect();
+    });
+
+    // Chapter offsets must use rendered coordinates because only the book is scaled.
+    const chapterScrollTop = element => {
+      const container = bookContent.value;
+      return element.getBoundingClientRect().top - container.getBoundingClientRect().top
+        - container.clientTop + container.scrollTop;
+    };
 
     const setChapterRef = (index, el) => {
       if (el) {
@@ -95,7 +135,7 @@ export default {
       for (let index = 0; index < props.chapters.length; index += 1) {
         const chapterEl = chapterRefs.value.get(index);
         if (!chapterEl) continue;
-        if (chapterEl.offsetTop <= threshold) {
+        if (chapterScrollTop(chapterEl) <= threshold) {
           activeIndex = index;
         } else {
           break;
@@ -187,7 +227,7 @@ export default {
       const chapterEl = chapterRefs.value.get(index);
       if (!container || !chapterEl) return;
 
-      container.scrollTo({ top: chapterEl.offsetTop - 10, behavior: 'smooth' });
+      container.scrollTo({ top: chapterScrollTop(chapterEl) - 10, behavior: 'smooth' });
 
       if (fragment) {
         setTimeout(() => {
@@ -252,6 +292,7 @@ export default {
 
     return {
       rendererContainer,
+      contentWrapper, scaledContentHeight, viewportHeight,
       bookContent,
       setChapterRef,
       extractBodyContent,
@@ -335,21 +376,38 @@ export default {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  transition: transform 0.2s ease;
-  transform-origin: top center;
-  height: 100vh;
+  min-height: 0;
+  position: relative;
+  scrollbar-gutter: stable;
+}
+
+.zoom-space {
+  position: relative;
+  width: 100%;
+  overflow: clip;
 }
 
 .content-wrapper {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  translate: -50% 0;
+  transform-origin: top center;
   max-width: 980px;
   margin: 0 auto;
   width: 100%;
+  background: transparent;
+}
+
+.chapter-section {
+  display: flow-root;
+  min-height: var(--chapter-page-height, 0px);
   padding: 24px 56px 48px;
   background: var(--epub-container-bg, white);
 }
 
-.chapter-section {
-  margin-bottom: 16px;
+.chapter-section + .chapter-section {
+  margin-top: 20px;
 }
 
 .chapter-header h2 {
@@ -405,12 +463,36 @@ export default {
 }
 
 @media (max-width: 767px) {
-  .content-wrapper {
+  .chapter-section {
     padding: 16px 14px 40px;
   }
 
   .chapter-header h2 {
     font-size: 20px;
+  }
+}
+@media print {
+  .epub-renderer, #book-content, .zoom-space {
+    display: block;
+    height: auto !important;
+    overflow: visible;
+  }
+
+  .content-wrapper {
+    position: static;
+    translate: none;
+    transform: none !important;
+    max-width: none;
+    padding: 0;
+  }
+
+  .chapter-section {
+    min-height: 0;
+    padding: 0;
+  }
+  .chapter-section + .chapter-section {
+    margin-top: 0;
+    break-before: page;
   }
 }
 </style>

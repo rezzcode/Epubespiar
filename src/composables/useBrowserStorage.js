@@ -1,4 +1,4 @@
-import { ref, watch, nextTick, toRaw } from "vue";
+import { ref, watch, nextTick, toRaw, onScopeDispose } from "vue";
 
 function mergeDeep(defaults, source) {
 	// Merge the default options with the stored options
@@ -131,7 +131,8 @@ function useBrowserStorage(key, defaultValue, storageType = "sync") {
 		{ deep: true, flush: "post" },
 	);
 	// Add the onChanged listener here
-	chrome.storage[storageType].onChanged.addListener(async function (changes) {
+	const handleStorageChange = async function (changes, area) {
+		if (area !== storageType) return;
 		if (changes?.[key]) {
 			isUpdatingFromStorage = true;
 			const { oldValue, newValue } = changes[key];
@@ -139,6 +140,8 @@ function useBrowserStorage(key, defaultValue, storageType = "sync") {
 			await nextTick();
 			isUpdatingFromStorage = false;
 		}
-	});
+	};
+	chrome.storage.onChanged.addListener(handleStorageChange);
+	onScopeDispose(() => chrome.storage.onChanged.removeListener(handleStorageChange));
 	return { data, promise };
 }

@@ -1,10 +1,10 @@
 <template>
-    <div class="sidebar" :class="{ open: isOpen }" @mouseleave="stopResizing">
+    <div class="sidebar" :class="{ open: isOpen, resizing: isResizing }" :style="{ width: sidebarSize === null ? undefined : `${sidebarSize}px` }">
       <div class="sidebar-header">
         <h3>Table of Contents</h3>
         <!-- span v-if="chaptersCount" class="chapters-count">{{ chaptersCount }}</span -->
       </div>
-      <div class="sidebar-resizer" @mousedown="startResizing"></div>
+      <div class="sidebar-resizer" @pointerdown="startResizing" @pointermove="onPointerMove" @pointerup="stopResizing" @pointercancel="stopResizing" @lostpointercapture="stopResizing"></div>
       <div class="sidebar-content" ref="contentContainer">
         <div class="toc-wrapper">
           <ul class="toc-list">
@@ -95,7 +95,7 @@
   </template>
   
   <script>
-  import { ref, computed, watch, nextTick } from 'vue';
+  import { ref, computed, watch, nextTick, onBeforeUnmount } from 'vue';
 
   export default {
     props: {
@@ -117,35 +117,50 @@
       const expandedItems = ref({});
       const contentContainer = ref(null);
       const isResizing = ref(false);
-      const startX = ref(0);
-      const startWidth = ref(0);
-      const onMouseMove = (e) => {
-        if (!isResizing.value) return;
-        const dx = e.clientX - startX.value;
-        let newWidth = startWidth.value + dx;
-        const min = 240;
-        const max = 480;
-        if (newWidth < min) newWidth = min;
-        if (newWidth > max) newWidth = max;
-        document.documentElement.style.setProperty('--sidebar-width', `${newWidth}px`);
+      const sidebarSize = ref(null);
+      let startX = 0;
+      let startWidth = 0;
+      let resizeHandle = null;
+      let activePointerId = null;
+      let previousUserSelect = '';
+
+      const onPointerMove = (e) => {
+        if (!isResizing.value || e.pointerId !== activePointerId) return;
+        const sidebar = resizeHandle.parentElement;
+        const configuredMax = parseFloat(getComputedStyle(sidebar).getPropertyValue('--sidebar-width')) || 480;
+        const max = Math.min(configuredMax, document.documentElement.clientWidth);
+        const min = Math.min(240, max);
+        sidebarSize.value = Math.min(max, Math.max(min, startWidth + e.clientX - startX));
+      };
+
+      const stopResizing = (e) => {
+        if (!isResizing.value || (e?.pointerId !== undefined && e.pointerId !== activePointerId)) return;
+        isResizing.value = false;
+        document.body.style.userSelect = previousUserSelect;
+        if (resizeHandle?.hasPointerCapture(activePointerId)) {
+          resizeHandle.releasePointerCapture(activePointerId);
+        }
+        resizeHandle = null;
+        activePointerId = null;
       };
 
       const startResizing = (e) => {
+        if (!props.isOpen || isResizing.value || !e.isPrimary || e.button !== 0) return;
+        e.preventDefault();
+        resizeHandle = e.currentTarget;
+        activePointerId = e.pointerId;
+        startX = e.clientX;
+        startWidth = resizeHandle.parentElement.getBoundingClientRect().width;
+        previousUserSelect = document.body.style.userSelect;
+        document.body.style.userSelect = 'none';
         isResizing.value = true;
-        startX.value = e.clientX;
-        const el = e.currentTarget?.parentElement;
-        const rect = el?.getBoundingClientRect();
-        startWidth.value = rect ? rect.width : 320;
-        window.addEventListener('mousemove', onMouseMove);
-        window.addEventListener('mouseup', stopResizing);
+        resizeHandle.setPointerCapture(activePointerId);
       };
 
-      const stopResizing = () => {
-        if (!isResizing.value) return;
-        isResizing.value = false;
-        window.removeEventListener('mousemove', onMouseMove);
-        window.removeEventListener('mouseup', stopResizing);
-      };
+      watch(() => props.isOpen, (isOpen) => {
+        if (!isOpen) stopResizing();
+      });
+      onBeforeUnmount(() => stopResizing());
 
       const normalizeHref = (href) => String(href || '').trim();
       const getItemKey = (item, index) => normalizeHref(item?.href) || `toc-item-${index}`;
@@ -319,6 +334,9 @@
       return {
         expandedItems,
         contentContainer,
+        sidebarSize,
+        isResizing,
+        onPointerMove,
         startResizing,
         stopResizing,
         chaptersCount,
@@ -341,7 +359,9 @@
   
   <style scoped>
   .sidebar {
-    width: var(--sidebar-size, 320px);
+    width: var(--sidebar-size, 240px);
+    min-width: min(240px, 100vw);
+    max-width: min(var(--sidebar-width, 480px), 100vw);
     background-color: var(--sidebar-bg-color, #d4d4d7);
     height: 100%;
     position: fixed;
@@ -365,8 +385,13 @@
     bottom: 0;
     width: 6px;
     cursor: col-resize;
+    touch-action: none;
     background: transparent;
     z-index: 2;
+  }
+
+  .sidebar.resizing {
+    user-select: none;
   }
 
   .sidebar.open {
@@ -669,7 +694,7 @@
 
   @media (min-width: 768px) {
     .sidebar {
-      width: 320px;
+      width: 270px;
     }
   }
 
@@ -679,43 +704,7 @@
     }
   }
 
-  /* Light mode - can keep red or customize differently */
-  @media (prefers-color-scheme: light) {
-    .close-book-btn {
-      --close-btn-bg: rgba(239, 68, 68, 0.1);
-      --close-btn-color: #ef4444;
-      --close-btn-border: rgba(239, 68, 68, 0.3);
-      --close-btn-hover-bg: rgba(239, 68, 68, 0.2);
-      --close-btn-hover-border: rgba(239, 68, 68, 0.5);
-    }
-  }
+
   
-  @media (prefers-color-scheme: dark) {
-    .sidebar {
-      --sidebar-bg-color: #2a2a2e;
-      --text-color: #f5f5f5;
-      --text-color-secondary: #8f8f9d;
-      --hover-outline-color: #8f8f9d;
-      --toolbar-sp-color: #00000063;
-      --link-hover-bg: rgba(143, 143, 157, 0.08);
-      --active-bg: rgba(143, 143, 157, 0.12);
-      --accent-color: #6a6a75;
-    }
-    
-    .sidebar.open {
-      box-shadow: 2px 0 8px rgba(0, 0, 0, 0.3);
-    }
 
-    .close-book-btn {
-      --close-btn-bg: #3a3a40;
-      --close-btn-color: #e5e7eb;
-      --close-btn-border: #4b4b55;
-      --close-btn-hover-bg: #4b4b55;
-      --close-btn-hover-border: #6b6b75;
-    }
-
-    .sidebar-footer {
-      border-top-color: #3a3a40;
-    }
-  }
 </style>

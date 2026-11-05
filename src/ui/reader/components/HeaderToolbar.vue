@@ -1,5 +1,5 @@
 <template>
-  <div class="header-toolbar">
+  <div class="header-toolbar" :class="{ 'show-chapter-title': isBookLoaded && !showInlineControls }">
     <div class="left-toolbar">
       <button @click="$emit('toggle-sidebar')" title="Toggle Sidebar">
           <svg xmlns="http://www.w3.org/2000/svg" class="g-svg" height="18px" viewBox="0 -960 960 960" width="18px" fill="currentColor">
@@ -14,7 +14,7 @@
       </div>
     </div>
     
-    <div class="middle-toolbar">
+    <div v-if="isBookLoaded && showInlineControls" class="middle-toolbar">
       <button @click="$emit('zoom-out')" title="Zoom Out">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
           <path fill-rule="evenodd" d="M2 8a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11A.5.5 0 0 1 2 8"/>
@@ -54,6 +54,10 @@
       </div>
     </div>
     
+    <div v-if="isBookLoaded && !showInlineControls" class="chapter-title" :title="currentChapterTitle">
+      {{ currentChapterTitle }}
+    </div>
+
     <div class="right-toolbar">
       <div class="file-input-container">
         <input 
@@ -64,85 +68,49 @@
           ref="fileInput"
           class="hidden-input"
         >
-        <!-- Show open button only when no book is loaded -->
-        <button v-if="!isBookLoaded" @click="triggerFileInput" title="Open EPUB File" class="open-epub-button">
-          <svg fill="currentColor" width="18" height="18" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
-            <path d="M28,8H20.8284L17.4143,4.5859A2,2,0,0,0,16,4H4A2,2,0,0,0,2,6V26a2,2,0,0,0,2,2H28a2,2,0,0,0,2-2V10A2,2,0,0,0,28,8ZM8,26V14h8v6.17l-2.59-2.58L12,19l5,5,5-5-1.41-1.41L18,20.17V14a2.0025,2.0025,0,0,0-2-2H8a2.0025,2.0025,0,0,0-2,2V26H4V6H16l4,4h8v2H22v2h6V26Z"/>
-          </svg>
-          Open EPUB
-        </button>
-        
-        <!-- Show these buttons only when a book is loaded -->
-        <div v-if="isBookLoaded" class="book-controls">
+        <div class="book-controls">
+          <!-- Bookshelf/Library button - always visible -->
+          <button @click="$emit('toggle-bookshelf')" title="Open Bookshelf" aria-label="Open Bookshelf">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+              <path d="M1 2.828c.885-.37 2.154-.769 3.388-.893 1.33-.134 2.458.063 3.112.752v9.746c-.935-.53-2.12-.603-3.213-.493-1.18.12-2.37.461-3.287.811zm7.5-.141c.654-.689 1.782-.886 3.112-.752 1.234.124 2.503.523 3.388.893v9.923c-.918-.35-2.107-.692-3.287-.81-1.094-.111-2.278-.039-3.213.492zM8 1.783C7.015.936 5.587.81 4.287.94c-1.514.153-3.042.672-3.994 1.105A.5.5 0 0 0 0 2.5v11a.5.5 0 0 0 .707.455c.882-.4 2.303-.881 3.68-1.02 1.409-.142 2.59.087 3.223.877a.5.5 0 0 0 .78 0c.633-.79 1.814-1.019 3.222-.877 1.378.139 2.8.62 3.681 1.02A.5.5 0 0 0 16 13.5v-11a.5.5 0 0 0-.293-.455c-.952-.433-2.48-.952-3.994-1.105C10.413.809 8.985.936 8 1.783"/>
+            </svg>
+          </button>
+
+          <!-- Show open button only when no book is loaded -->
+          <button v-if="!isBookLoaded" @click="triggerFileInput" title="Open EPUB File" class="open-epub-button">
+            <svg fill="currentColor" width="18" height="18" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+              <path d="M28,8H20.8284L17.4143,4.5859A2,2,0,0,0,16,4H4A2,2,0,0,0,2,6V26a2,2,0,0,0,2,2H28a2,2,0,0,0,2-2V10A2,2,0,0,0,28,8ZM8,26V14h8v6.17l-2.59-2.58L12,19l5,5,5-5-1.41-1.41L18,20.17V14a2.0025,2.0025,0,0,0-2-2H8a2.0025,2.0025,0,0,0-2,2V26H4V6H16l4,4h8v2H22v2h6V26Z"/>
+            </svg>
+            Open EPUB
+          </button>
+          
+          <!-- Show these buttons only when a book is loaded -->
           <button v-if="showDownloadButton" @click="handleDownload" title="Download EPUB" aria-label="Download EPUB file">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
               <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5"/>
               <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708z"/>
             </svg>
           </button>
-          <button @click="toggleFullscreen" title="Enter full Screen">
+          <button v-if="isBookLoaded" @click="toggleFullscreen" title="Enter full Screen">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrows-angle-expand" viewBox="0 0 16 16">
               <path fill-rule="evenodd" d="M5.828 10.172a.5.5 0 0 0-.707 0l-4.096 4.096V11.5a.5.5 0 0 0-1 0v3.975a.5.5 0 0 0 .5.5H4.5a.5.5 0 0 0 0-1H1.732l4.096-4.096a.5.5 0 0 0 0-.707m4.344-4.344a.5.5 0 0 0 .707 0l4.096-4.096V4.5a.5.5 0 1 0 1 0V.525a.5.5 0 0 0-.5-.5H11.5a.5.5 0 0 0 0 1h2.768l-4.096 4.096a.5.5 0 0 0 0 .707"/>
             </svg>
           </button>
-        </div>
-      </div>
-      
-      <!-- Download Intercept Toggle -->
-      <div class="download-intercept-container" title="Intercept EPUB downloads">
-        <label class="toggle-switch">
-          <input 
-            type="checkbox" 
-            v-model="interceptDownloads"
-            @change="onInterceptToggle"
-          />
-          <span class="toggle-slider"></span>
-        </label>
-        <span class="toggle-label">Auto-open EPUBs</span>
-      </div>
-      
-      <!--div class="settings-container">
-        <button @click="toggleSettings" title="Settings">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-gear" viewBox="0 0 16 16">
+        
+          <button v-if="isBookLoaded" @click="$emit('toggle-settings')" title="Reader settings" aria-label="Reader settings" aria-haspopup="dialog">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
               <path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492zM5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0z"/>
               <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52l-.094-.319zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 0 0-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.292A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.115l.094-.319z"/>
-          </svg>
-        </button>
-        
-        <div class="settings-menu" v-if="settingsOpen">
-          <button @click="emitAndClose('go-to-first')">
-            <svg class="g-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" width="16" height="16" fill="currentColor">
-              <path d="m296-224-56-56 240-240 240 240-56 56-184-183-184 183Zm0-240-56-56 240-240 240 240-56 56-184-183-184 183Z"/>
             </svg>
-            Go to First Page
-          </button>
-          <button @click="emitAndClose('go-to-last')">
-            <svg class="g-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" width="16" height="16" fill="currentColor">
-              <path d="M480-200 240-440l56-56 184 183 184-183 56 56-240 240Zm0-240L240-680l56-56 184 183 184-183 56 56-240 240Z"/>
-            </svg>
-            Go to Last Page
-          </button>
-          <button @click="emitAndClose('set-vertical-scroll')">
-            <svg class="g-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 -960 960 960" width="16" height="16" fill="currentColor">
-              <path d="M120-160v-80h720v80H120Zm0-560v-80h720v80H120Zm80 400q-33 0-56.5-23.5T120-400v-160q0-33 23.5-56.5T200-640h560q33 0 56.5 23.5T840-560v160q0 33-23.5 56.5T760-320H200Zm0-80h560v-160H200v160Zm0-160v160-160Z"/>
-            </svg>
-            Vertical Scrolling
-          </button>
-          <button @click="emitAndClose('set-horizontal-scroll')">
-            <svg xmlns="http://www.w3.org/2000/svg" class="g-svg" height="16px" viewBox="0 -960 960 960" width="16px" fill="currentColor">
-              <path d="M120-260v-440q0-25 17.5-42.5T180-760q25 0 42.5 17.5T240-700v440q0 25-17.5 42.5T180-200q-25 0-42.5-17.5T120-260Zm220 60q-25 0-42.5-17.5T280-260v-440q0-25 17.5-42.5T340-760h280q25 0 42.5 17.5T680-700v440q0 25-17.5 42.5T620-200H340Zm380-60v-440q0-25 17.5-42.5T780-760q25 0 42.5 17.5T840-700v440q0 25-17.5 42.5T780-200q-25 0-42.5-17.5T720-260Zm-360-20h240v-400H360v400Zm120-200Z"/>
-            </svg>
-            Horizontal Scrolling
           </button>
         </div>
-      </div-->
+      </div>
     </div>
   </div>
 </template>
   
 <script>
 import { ref, onMounted, onBeforeUnmount, watch, computed } from 'vue';
-import { useBrowserLocalStorage } from '../../../composables/useBrowserStorage';
 
 export default {
   props: {
@@ -151,9 +119,12 @@ export default {
     isBookLoaded: { type: Boolean, default: false },
     fontSize: { type: Number, default: 16 },
     zoomLevel: { type: Number, default: 1 },
+    currentChapterTitle: { type: String, default: '' },
+    showInlineControls: { type: Boolean, default: true },
     epubUrl: { type: String, default: null }
   },
   emits: [
+    'toggle-bookshelf',
     'toggle-sidebar', 
     'scroll-up', 'scroll-down', 
     'zoom-in', 'zoom-out', 'zoom-change',
@@ -163,18 +134,16 @@ export default {
     'set-vertical-scroll', 'set-horizontal-scroll',
     'toggle-search',
     'toggle-fullscreen',
+    'toggle-settings',
     'download-epub'
   ],
-  setup(props, { emit }) {
-    const settingsOpen = ref(false);
+  setup(props, { emit, expose }) {
     const fileInput = ref(null);
     const searchOpen = ref(false);
     const searchQuery = ref('');
     const searchResults = ref([]);
     const searchInput = ref(null);
     
-    // Download intercept toggle state (default: false)
-    const { data: interceptDownloads } = useBrowserLocalStorage('interceptDownloads', false);
 
     // Check if download button should be shown (book loaded from HTTPS)
     const showDownloadButton = computed(() => {
@@ -197,10 +166,6 @@ export default {
       console.log('isBookLoaded changed:', newValue);
     });
 
-    const toggleSettings = () => {
-      settingsOpen.value = !settingsOpen.value;
-    };
-
     const onZoomChange = (event) => {
       emit('zoom-change', event.target.value);
     };
@@ -210,14 +175,17 @@ export default {
     };
 
     const triggerFileInput = () => {
-      fileInput.value.click();
+      fileInput.value?.click();
     };
+    expose({ openFilePicker: triggerFileInput });
 
     const onFileSelected = (event) => {
       const file = event.target.files[0];
       if (file) {
         emit('file-selected', file);
       }
+      // Allow selecting the same EPUB again after closing it.
+      event.target.value = '';
     };
 
     const toggleSearch = () => {
@@ -233,16 +201,6 @@ export default {
       emit('download-epub');
     };
     
-    const onInterceptToggle = () => {
-      // The value is already updated by v-model
-      // Storage is automatically synced via useBrowserLocalStorage
-    };
-
-    const emitAndClose = (event) => {
-      emit(event);
-      settingsOpen.value = false;
-    };
-
     const performSearch = async () => {
       if (!searchQuery.value.trim()) return;
       emit('search', searchQuery.value);
@@ -253,9 +211,6 @@ export default {
     };
 
     const handleClickOutside = (event) => {
-      if (settingsOpen.value && !event.target.closest('.settings-container')) {
-        settingsOpen.value = false;
-      }
       if (searchOpen.value && !event.target.closest('.search-container')) {
         searchOpen.value = false;
       }
@@ -277,10 +232,10 @@ export default {
     });
 
     return {
-      settingsOpen, fileInput, searchOpen, searchQuery, searchResults, searchInput,
-      zoomSelectValue, interceptDownloads, showDownloadButton,
-      toggleSettings, onZoomChange, onFontSizeChange, triggerFileInput, onFileSelected, 
-      emitAndClose, toggleSearch, toggleFullscreen, handleDownload, onInterceptToggle, performSearch, goToSearchResult
+      fileInput, searchOpen, searchQuery, searchResults, searchInput,
+      zoomSelectValue, showDownloadButton,
+      onZoomChange, onFontSizeChange, triggerFileInput, onFileSelected,
+      toggleSearch, toggleFullscreen, handleDownload, performSearch, goToSearchResult
     };
   }
 };
@@ -300,6 +255,27 @@ export default {
   .left-toolbar, .middle-toolbar, .right-toolbar {
     display: flex;
     align-items: center;
+    gap: 4px;
+  }
+
+  .header-toolbar.show-chapter-title {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .show-chapter-title .left-toolbar { min-width: 0; }
+  .show-chapter-title .page-indicator { overflow: hidden; white-space: nowrap; }
+  .show-chapter-title .right-toolbar { justify-self: end; }
+  .chapter-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-color, #333);
   }
 
   button {
@@ -308,7 +284,7 @@ export default {
     color: var(--text-color, #333);
     font-size: 14px;
     cursor: pointer;
-    margin: 0 5px;
+    margin: 0;
     display: flex;
     align-items: center;
     padding: 5px 7px;
@@ -334,7 +310,7 @@ export default {
   
   select {
     padding: 2px 8px;
-    border-radius: 4px 6px;
+    border-radius: 6px;
     background-color: var(--toolbar-bg-color, #f5f6f7);
     border: 1px solid var(--border-color, #d1d5db);
     color: var(--text-color, #333);
@@ -391,34 +367,6 @@ export default {
     font-weight: 600;
   }
   
-  .settings-container {
-    position: relative;
-  }
-  
-  .settings-menu {
-    position: absolute;
-    right: 0;
-    top: 100%;
-    background: var(--toolbar-bg-color, #f5f6f7);
-    border: 1px solid var(--border-color, #ccc);
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
-    padding: 5px;
-    border-radius: 5px;
-    z-index: 100;
-    min-width: 180px;
-  }
-  
-  .settings-menu button {
-    display: block;
-    width: 100%;
-    text-align: left;
-    padding: 8px 10px;
-  }
-
-  .settings-menu button:hover {
-    background-color: rgba(16, 185, 129, 0.1);
-  }
-  
   .hidden-input {
     display: none;
   }
@@ -428,31 +376,7 @@ export default {
     font-size: 16px;
   }
   
-  @media (prefers-color-scheme: dark) {
-    .header-toolbar {
-      --toolbar-bg-color: #38383d;
-      --toolbar-bg-secondary: #2a2a2e;
-      --text-color: #f5f5f5;
-      --hover-outline-color: #8f8f9d;
-      --toolbar-sp-color: #00000063;
-      --button-hover-bg: rgba(143, 143, 157, 0.15);
-      --border-color: #555555;
-      --control-bg: rgba(143, 143, 157, 0.1);
-      --control-bg-hover: rgba(143, 143, 157, 0.15);
-      --control-border: rgba(143, 143, 157, 0.2);
-    }
-    
-    select {
-      background-color: #38383d;
-      color: #f5f5f5;
-      border-color: #666;
-    }
-    
-    .settings-menu {
-      background: #38383d;
-      border-color: #666;
-    }
-  }
+
   
   /* Tablet and below: Hide sidebar text */
   @media (max-width: 842px) {
@@ -556,7 +480,7 @@ export default {
   .book-controls {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
   }
 
   .search-results {
@@ -569,92 +493,4 @@ export default {
     cursor: pointer;
   }
 
-  /* Download Intercept Toggle Styles */
-  .download-intercept-container {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-left: 12px;
-  }
-
-  .toggle-label {
-    font-size: 13px;
-    color: var(--text-color, #333);
-    white-space: nowrap;
-  }
-
-  .toggle-switch {
-    position: relative;
-    display: inline-block;
-    width: 44px;
-    height: 24px;
-  }
-
-  .toggle-switch input {
-    opacity: 0;
-    width: 0;
-    height: 0;
-  }
-
-  .toggle-slider {
-    position: absolute;
-    cursor: pointer;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background-color: #ccc;
-    transition: 0.3s;
-    border-radius: 24px;
-  }
-
-  .toggle-slider:before {
-    position: absolute;
-    content: "";
-    height: 18px;
-    width: 18px;
-    left: 3px;
-    bottom: 3px;
-    background-color: white;
-    transition: 0.3s;
-    border-radius: 50%;
-  }
-
-  .toggle-switch input:checked + .toggle-slider {
-    background-color: #10b981;
-  }
-
-  .toggle-switch input:checked + .toggle-slider:before {
-    transform: translateX(20px);
-  }
-
-  .toggle-switch input:focus + .toggle-slider {
-    box-shadow: 0 0 1px #10b981;
-  }
-
-  /* Responsive behavior for toggle */
-  @media (max-width: 768px) {
-    .download-intercept-container {
-      margin-left: 6px;
-      gap: 4px;
-    }
-    
-    .toggle-label {
-      display: none;
-    }
-    
-    .toggle-switch {
-      width: 38px;
-      height: 20px;
-    }
-    
-    .toggle-slider:before {
-      height: 14px;
-      width: 14px;
-    }
-    
-    .toggle-switch input:checked + .toggle-slider:before {
-      transform: translateX(18px);
-    }
-  }
 </style>

@@ -17,12 +17,17 @@
     @drop.prevent="handleDrop"
   >
     <header-toolbar
+      ref="headerToolbar"
       :currentPage="currentPage"
       :totalPages="totalPages"
       :isBookLoaded="isBookLoaded"
       :fontSize="fontSize"
       :zoomLevel="zoomLevel"
+      :showInlineControls="showInlineControls"
+      :currentChapterTitle="currentChapterTitle"
+      @toggle-settings="settingsOpen = true"
       :epubUrl="currentEpubUrl"
+      @toggle-bookshelf="toggleBookshelf"
       @toggle-sidebar="toggleSidebar"
       @scroll-up="scrollUp"
       @scroll-down="scrollDown"
@@ -35,6 +40,7 @@
       @download-epub="downloadEpub"
     />
 
+    <bookshelf-sidebar :isOpen="bookshelfOpen" :books="shelfBooks" :isBookLoaded="isBookLoaded" @close="bookshelfOpen = false" @file-upload="file => loadEpub(file)" @book-select="openShelfBook" @book-deleted="refreshShelf" />
     <div class="main-content">
       <div
         v-if="sidebarOpen"
@@ -56,47 +62,65 @@
         :isBookLoaded="isBookLoaded"
         :zoomLevel="zoomLevel"
         :fontSize="fontSize"
+        :fontWeight="fontWeight"
+        :fontFamily="fontFamily"
         :chapters="chapters"
         @content-scroll="handleContentScroll"
         @navigate-internal="handleInternalNavigation"
       />
     </div>
+    <reader-settings v-if="settingsOpen && isBookLoaded" @close="settingsOpen = false"
+      v-model:fontSize="fontSize" v-model:zoomLevel="zoomLevel"
+      v-model:fontWeight="fontWeight" v-model:fontFamily="fontFamily"
+      v-model:showInlineControls="showInlineControls" />
   </div>
 </template>
 
 <script>
-import { onMounted, onUnmounted } from 'vue';
+import { computed, ref, onMounted, onUnmounted } from 'vue';
+import BookshelfSidebar from './components/BookshelfSidebar.vue';
+import useBookStorage from '../../composables/useBookStorage.js';
 import HeaderToolbar from './components/HeaderToolbar.vue';
 import SidebarComponent from './components/SidebarComponent.vue';
 import EpubRenderer from './components/EpubRenderer.vue';
 import LoadingPage from './components/LoadingPage.vue';
+import ReaderSettings from './components/ReaderSettings.vue';
 import useNotification from '../../composables/useNotification.js';
 import { useBookLoader } from '../../composables/reader/useBookLoader.js';
 import { useReaderInteractions } from '../../composables/reader/useReaderInteractions.js';
 import { useReaderNavigation } from '../../composables/reader/useReaderNavigation.js';
 import { useReadingPosition } from '../../composables/reader/useReadingPosition.js';
 import { useReaderState } from '../../composables/reader/useReaderState.js';
+import { readerDefaults, readerLimits } from '../../composables/reader/useReaderSettings.js';
+import { isReaderTypingEvent, useReaderShortcuts } from '../../composables/reader/useReaderShortcuts.js';
 import { downloadEpub as downloadEpubFile } from '../../services/epubProcesor/downloadEpub.js';
 
 export default {
   components: {
-    HeaderToolbar,
+    BookshelfSidebar, HeaderToolbar,
     SidebarComponent,
     EpubRenderer,
-    LoadingPage
+    LoadingPage, ReaderSettings
   },
   setup() {
     const { addNotification } = useNotification();
     const readerState = useReaderState();
+    const settingsOpen = ref(false);
+    const headerToolbar = ref(null);
     const {
       sidebarOpen, currentPage, totalPages, zoomLevel,
-      fontSize, bookContent, tableOfContents,
+      fontSize, fontWeight, fontFamily, showInlineControls, settingsReady, bookContent, tableOfContents,
       chapters, spineItems, currentChapter, currentEpubUrl,
       currentBookKey, isDragging, isLoadingBook,
       loadingTitle, loadingMessage, loadingSubtitle,
       showLoadingProgress, loadingProgress, isBookLoaded,
       createTrackedObjectUrl, cleanupObjectUrls, resetReaderState
     } = readerState;
+
+    const currentChapterTitle = computed(() => {
+      const href = currentChapter.value?.split('#')[0];
+      return chapters.value.find(chapter => chapter.href.split('#')[0] === href)?.title || '';
+    });
 
     const navigation = useReaderNavigation({
       bookContent,
@@ -112,7 +136,25 @@ export default {
       getScrollElement: navigation.getScrollElement
     });
 
+    const bookshelfOpen = ref(false);
+    const shelfBooks = ref([]);
+    const storage = useBookStorage();
+    const refreshShelf = async () => {
+      try { shelfBooks.value = await storage.getAllBooks(); }
+      catch { addNotification({message:'Could not load library', type:'error'}); }
+    };
+    const toggleBookshelf = () => { bookshelfOpen.value = !bookshelfOpen.value; sidebarOpen.value = false; refreshShelf(); };
+    const openShelfBook = async book => {
+      try {
+        const saved = await storage.getBook(book.id);
+        if (!saved?.file) throw new Error('Missing book');
+        await loader.loadEpub(new File([saved.file], saved.file.name || 'book.epub', {type:'application/epub+zip'}), false, book.id);
+      } catch { addNotification({message:'Could not open saved book', type:'error'}); }
+    };
     const loader = useBookLoader({
+      onSaved: refreshShelf,
+      onOpened: () => { bookshelfOpen.value = false; },
+      persistReadingPosition: readingPosition.persistReadingPosition,
       refs: {
         isLoadingBook, loadingTitle, loadingMessage,
         loadingSubtitle, showLoadingProgress, currentEpubUrl,
@@ -140,7 +182,11 @@ export default {
     };
 
     const handleCloseBook = () => {
+      settingsOpen.value = false;
+      readingPosition.dispose();
       resetReaderState();
+      bookshelfOpen.value = true;
+      refreshShelf();
       currentEpubUrl.value = null;
       sidebarOpen.value = false;
       
@@ -149,11 +195,11 @@ export default {
     };
 
     const zoomIn = () => {
-      zoomLevel.value = Math.min(zoomLevel.value + 0.1, 2);
+      zoomLevel.value = Math.min(Number((zoomLevel.value + readerLimits.zoomLevel.step).toFixed(2)), readerLimits.zoomLevel.max);
     };
 
     const zoomOut = () => {
-      zoomLevel.value = Math.max(zoomLevel.value - 0.1, 0.5);
+      zoomLevel.value = Math.max(Number((zoomLevel.value - readerLimits.zoomLevel.step).toFixed(2)), readerLimits.zoomLevel.min);
     };
 
     const changeZoom = (value) => {
@@ -187,8 +233,39 @@ export default {
       }
     };
 
+    // Include legacy library overlays as well as native/accessible dialogs.
+    const shortcutsBlocked = () => settingsOpen.value || isLoadingBook.value
+      || !!document.querySelector('dialog[open], [role="dialog"], [role="alertdialog"], .dialog-overlay');
+    const canAdjustBook = () => isBookLoaded.value && !bookshelfOpen.value;
+    const adjustFont = direction => {
+      const { min, max, step } = readerLimits.fontSize;
+      fontSize.value = Math.max(min, Math.min(max, fontSize.value + direction * step));
+    };
+    useReaderShortcuts({
+      isBlocked: shortcutsBlocked,
+      hasSelection: event => {
+        const roots = (event.composedPath?.() || []).map(element => element?.getRootNode?.());
+        return [document, ...roots].some(root => root?.getSelection?.()?.toString().length > 0);
+      },
+      actions: {
+        openSettings: { enabled: canAdjustBook, run: () => { settingsOpen.value = true; } },
+        openToc: { enabled: () => isBookLoaded.value, run: () => { bookshelfOpen.value = false; sidebarOpen.value = true; } },
+        openLibrary: { run: () => { bookshelfOpen.value = true; sidebarOpen.value = false; refreshShelf(); } },
+        openBook: { enabled: () => !!headerToolbar.value, run: () => headerToolbar.value.openFilePicker() },
+        closeBook: { enabled: () => isBookLoaded.value, run: handleCloseBook },
+        zoomOut: { enabled: canAdjustBook, run: zoomOut },
+        zoomIn: { enabled: canAdjustBook, run: zoomIn },
+        resetZoom: { enabled: canAdjustBook, run: () => { zoomLevel.value = readerDefaults.zoomLevel; } },
+        fontSmaller: { enabled: canAdjustBook, run: () => adjustFont(-1) },
+        fontLarger: { enabled: canAdjustBook, run: () => adjustFont(1) },
+        resetFont: { enabled: canAdjustBook, run: () => { fontSize.value = readerDefaults.fontSize; } },
+        closeToc: { enabled: () => sidebarOpen.value && !bookshelfOpen.value, run: () => { sidebarOpen.value = false; } },
+      },
+    });
+
     const handleKeyUp = (event) => {
-      if (document.activeElement?.tagName === 'INPUT') return;
+      if (shortcutsBlocked() || bookshelfOpen.value || isReaderTypingEvent(event)
+        || event.ctrlKey || event.altKey || event.shiftKey || event.metaKey) return;
       if (event.key === 'ArrowLeft') navigation.scrollUp();
       if (event.key === 'ArrowRight') navigation.scrollDown();
     };
@@ -197,11 +274,13 @@ export default {
     let touchStartY = 0;
 
     const handleTouchStart = (event) => {
+      if (settingsOpen.value) return;
       touchStartX = event.touches[0].clientX;
       touchStartY = event.touches[0].clientY;
     };
 
     const handleTouchEnd = (event) => {
+      if (settingsOpen.value) return;
       const deltaX = event.changedTouches[0].clientX - touchStartX;
       const deltaY = event.changedTouches[0].clientY - touchStartY;
       if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > 50) {
@@ -214,7 +293,10 @@ export default {
       document.addEventListener('keyup', handleKeyUp);
       window.addEventListener('touchstart', handleTouchStart, { passive: true });
       window.addEventListener('touchend', handleTouchEnd, { passive: true });
-      loader.loadBookFromUrl();
+      refreshShelf();
+      bookshelfOpen.value = !new URLSearchParams(window.location.search).has('file')
+        && localStorage.getItem('reader-has-imported') === 'true';
+      settingsReady.then(() => loader.loadBookFromUrl());
     });
     onUnmounted(() => {
       document.removeEventListener('keyup', handleKeyUp);
@@ -225,7 +307,10 @@ export default {
     });
 
     return {
+      headerToolbar,
+      bookshelfOpen, shelfBooks, toggleBookshelf, openShelfBook, refreshShelf,
       sidebarOpen, currentPage, totalPages,
+      settingsOpen, fontWeight, fontFamily, showInlineControls, currentChapterTitle,
       zoomLevel, fontSize, bookContent, tableOfContents,
       currentChapter, chapters, currentEpubUrl,
       isLoadingBook, loadingTitle, loadingMessage,
@@ -281,6 +366,16 @@ export default {
   }
   to {
     opacity: 1;
+  }
+}
+@media print {
+  .epub-reader, .main-content {
+    display: block;
+    height: auto;
+    overflow: visible;
+  }
+  .main-content > :not(.epub-renderer), .epub-reader > :not(.main-content) {
+    display: none;
   }
 }
 </style>

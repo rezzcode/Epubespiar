@@ -110,7 +110,18 @@ export async function parseEpubArchive(file, createTrackedObjectUrl) {
     }))
     : parsedToc;
 
+  let cover = null;
+  const declared = manifestItems.find(item => item.properties.split(' ').includes('cover-image'))
+    || manifestById.get(opfDoc.querySelector('meta[name="cover"]')?.getAttribute('content'));
+  const candidates = [declared, ...manifestItems.filter(item => item.mediaType.startsWith('image/'))].filter(Boolean);
+  for (const item of candidates) {
+    const entry = zip.file(resolvePath(opfBasePath, item.href));
+    if (!entry) continue;
+    cover = 'data:' + item.mediaType + ';base64,' + await entry.async('base64');
+    break;
+  }
   return {
+    cover,
     metadata,
     sidebarToc,
     chapterEntries,

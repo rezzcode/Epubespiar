@@ -1,11 +1,12 @@
 import { ref, computed } from 'vue';
+import { useReaderSettings } from './useReaderSettings.js';
 
 export function useReaderState() {
     const sidebarOpen = ref(false);
     const currentPage = ref(0);
     const totalPages = ref(100);
-    const zoomLevel = ref(1);
-    const fontSize = ref(16);
+    const preferences = useReaderSettings();
+    const { zoomLevel, fontSize } = preferences;
 
     const bookContent = ref(null);
     const tableOfContents = ref([]);
@@ -48,6 +49,7 @@ export function useReaderState() {
   };
 
     return {
+        ...preferences,
         sidebarOpen,
         currentPage,
         totalPages,
