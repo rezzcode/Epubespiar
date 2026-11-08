@@ -30,7 +30,7 @@ const baseManifest = {
   permissions: [
     "storage",
     "activeTab",
-    "downloads",
+    "downloads"
   ],
   host_permissions: [
     "file://*/*",
