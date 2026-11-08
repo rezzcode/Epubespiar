@@ -46,12 +46,33 @@ function copyHtmlToRoot() {
   };
 }
 
+const NEW_FUNCTION_COERCION = /new Function\(""\s*\+\s*([A-Za-z_$][\w$]*)\)/g;
+
+function patchJszipEval() {
+  return {
+    name: 'patch-jszip-eval',
+    transform(code, id) {
+      const normalizedId = id.replace(/\\/g, '/');
+      if (!/jszip\/dist\/jszip(\.min)?\.js$/.test(normalizedId)) return null;
+      if (!code.includes('new Function')) return null;
+
+      const patched = code.replace(NEW_FUNCTION_COERCION, 'String($1)');
+      if (patched.includes('new Function')) {
+        this.error(
+          'jszip still contains `new Function` after patching — review patchJszipEval() in vite.config.js.'
+        );
+      }
+      return { code: patched, map: null };
+    },
+  };
+}
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const browser = process.env.BROWSER || 'chrome';
 
   return {
-    plugins: [vue(), copyHtmlToRoot()],
+    plugins: [vue(), copyHtmlToRoot(), patchJszipEval()],
     build: {
       outDir: `dist/${browser}`,
       emptyOutDir: true,
