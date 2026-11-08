@@ -7,7 +7,7 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-# I'm not using npm as my default manager, so:
+# im not using npm as my default manager so:
 *package-lock.json
 
 node_modules
