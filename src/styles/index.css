@@ -1,6 +1,0 @@
-/* The reader imports this entry point once; Vite bundles these files. */
-@import "./themes/light.css";
-@import "./themes/dark.css";
-@import "./themes/green.css";
-@import "./base.css";
-@import "./content.css";
