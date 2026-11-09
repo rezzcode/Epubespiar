@@ -1,0 +1,147 @@
+/* Applied inside each chapter ShadowRoot; variables inherit from the theme. */
+.chapter-content {
+  font-size: var(--chapter-font-size, 16px);
+  line-height: 1.7;
+  font-family: var(--chapter-font-family, inherit);
+  font-weight: var(--chapter-font-weight, 400);
+}
+
+.chapter-content h1,
+.chapter-content h2,
+.chapter-content h3,
+.chapter-content h4,
+.chapter-content h5,
+.chapter-content h6 {
+  margin-top: 1.6em;
+  margin-bottom: 0.7em;
+}
+
+.chapter-content p {
+  margin-bottom: 1em;
+}
+
+.chapter-content img,
+.chapter-content svg,
+.chapter-content video,
+.chapter-content canvas {
+  max-width: 100%;
+  height: auto;
+}
+
+.chapter-content table {
+  width: 100%;
+  overflow-x: auto;
+  display: block;
+}
+
+.chapter-content a {
+  color: var(--epub-text-color, #10b981);
+  text-decoration: none;
+}
+
+.chapter-content pre {
+  padding: 12px 16px;
+  border-radius: 6px;
+  overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.9em;
+  margin: 1.2em 0;
+  line-height: 1.5;
+  background-color: var(--background-color, #f6f8fa);
+  border: 1px solid var(--border-color, #d1d5db);
+}
+
+.chapter-content code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.9em;
+  padding: 2px 4px;
+  background-color: rgba(175, 184, 193, 0.2);
+  border-radius: 4px;
+}
+
+.chapter-content pre code {
+  padding: 0;
+  background-color: transparent;
+  border-radius: 0;
+}
+.chapter-content .syntax-comment {
+  color: var(--chapter-syntax-comment, #6a737d);
+}
+
+.chapter-content .syntax-string {
+  color: var(--chapter-syntax-string, #0a7d45);
+}
+
+.chapter-content .syntax-number {
+  color: var(--chapter-syntax-number, #005cc5);
+}
+
+.chapter-content .syntax-keyword {
+  color: var(--chapter-syntax-keyword, #d73a49);
+}
+
+.chapter-content .syntax-builtin {
+  color: var(--chapter-syntax-builtin, #6f42c1);
+}
+:host([data-appearance="dark"]) .chapter-content * {
+  background-color: transparent !important;
+}
+:host([data-appearance="dark"]) .chapter-content,
+:host([data-appearance="dark"]) .chapter-content p,
+:host([data-appearance="dark"]) .chapter-content span,
+:host([data-appearance="dark"]) .chapter-content div,
+:host([data-appearance="dark"]) .chapter-content li,
+:host([data-appearance="dark"]) .chapter-content td,
+:host([data-appearance="dark"]) .chapter-content th,
+:host([data-appearance="dark"]) .chapter-content h1,
+:host([data-appearance="dark"]) .chapter-content h2,
+:host([data-appearance="dark"]) .chapter-content h3,
+:host([data-appearance="dark"]) .chapter-content h4,
+:host([data-appearance="dark"]) .chapter-content h5,
+:host([data-appearance="dark"]) .chapter-content h6 {
+  color: var(--text-color, #f5f5f5) !important;
+}
+
+:host([data-appearance="dark"]) .chapter-content a {
+  color: var(--epub-text-color, #e89c30) !important;
+}
+
+:host([data-appearance="dark"]) .chapter-content .syntax-comment {
+  color: var(--chapter-syntax-comment, var(--text-color, #f5f5f5)) !important;
+}
+
+:host([data-appearance="dark"]) .chapter-content .syntax-string {
+  color: var(--chapter-syntax-string, var(--text-color, #f5f5f5)) !important;
+}
+
+:host([data-appearance="dark"]) .chapter-content .syntax-number {
+  color: var(--chapter-syntax-number, var(--text-color, #f5f5f5)) !important;
+}
+
+:host([data-appearance="dark"]) .chapter-content .syntax-keyword {
+  color: var(--chapter-syntax-keyword, var(--text-color, #f5f5f5)) !important;
+}
+
+:host([data-appearance="dark"]) .chapter-content .syntax-builtin {
+  color: var(--chapter-syntax-builtin, var(--text-color, #f5f5f5)) !important;
+}
+
+:host([data-appearance="light"]) .syntax-comment {
+  font-style: italic;
+}
+
+:host([data-appearance="light"]) .syntax-keyword {
+  font-weight: 600;
+}
+
+/* Override publisher body typography while retaining heading sizes and code faces. */
+.chapter-content :is(p, li, td, th, dd, blockquote) {
+  font-weight: var(--chapter-font-weight, 400) !important;
+}
+:host([data-custom-font="true"]) .chapter-content,
+:host([data-custom-font="true"]) .chapter-content :is(p, div, span, li, td, th, dd, blockquote, h1, h2, h3, h4, h5, h6) {
+  font-family: var(--chapter-font-family) !important;
+}
+:host([data-custom-font="true"]) .chapter-content :is(pre, code) :is(span, div) {
+  font-family: inherit !important;
+}
