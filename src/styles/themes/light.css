@@ -1,0 +1,40 @@
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+  color: var(--root-text);
+  background-color: var(--background-color);
+  --background-color: #d4d4d7;
+  --hover-outline-color: #10b981;
+  --toolbar-bg-color: #f5f6f7;
+  --toolbar-bg-secondary: #ebebed;
+  --text-color: black;
+  --toolbar-sp-color: #6a666687;
+  --border-color: #d1d5db;
+  --button-hover-bg: rgba(16, 185, 129, 0.1);
+  --card-bg: #ffffff;
+  --text-muted: #6b7280;
+  --input-bg: #ffffff;
+  --hover-bg: #f3f4f6;
+  --slider-bg: #e5e7eb;
+  --primary-color: #10b981;
+  --primary-light: #d1fae5;
+  --content-bg: #d4d4d7;
+  --content-text: #1a1a1a;
+  --epub-container-bg: white;
+  --epub-text-color: #10b981;
+  --chapter-syntax-comment: #6a737d;
+  --chapter-syntax-string: #0a7d45;
+  --chapter-syntax-number: #005cc5;
+  --chapter-syntax-keyword: #d73a49;
+  --chapter-syntax-builtin: #6f42c1;
+  --root-text: rgba(0, 0, 0, 0.87);
+}
+
+/* Preserved from SidebarComponent.vue. */
+:root[data-theme="light"] .close-book-btn {
+  --close-btn-bg: rgba(239, 68, 68, 0.1);
+  --close-btn-color: #ef4444;
+  --close-btn-border: rgba(239, 68, 68, 0.3);
+  --close-btn-hover-bg: rgba(239, 68, 68, 0.2);
+  --close-btn-hover-border: rgba(239, 68, 68, 0.5);
+}
