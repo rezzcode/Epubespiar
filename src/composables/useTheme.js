@@ -1,29 +1,23 @@
-import { computed, readonly, ref } from "vue";
+import { computed, readonly, ref } from 'vue';
 import {
-  themes,
-  themeOptions,
-  normalizeTheme,
-  resolveTheme,
-  getThemeAppearance,
-} from "../ui/reader/styles/themes/registry.js";
+  themes, themeOptions, normalizeTheme, resolveTheme, getThemeAppearance,
+} from '../ui/reader/styles/themes/registry.js';
 
-const preference = ref("auto");
-const resolvedTheme = ref("light");
+const preference = ref('auto');
+const resolvedTheme = ref('light');
 const isLoading = ref(true);
 let initialization;
 let mediaQuery;
 
 function readLocalPreference() {
   try {
-    const stored = localStorage.getItem("reader-theme");
+    const stored = localStorage.getItem('reader-theme');
     if (stored !== null) return normalizeTheme(stored);
-    const devStored =
-      localStorage.getItem("local_reader-theme") ||
-      localStorage.getItem("local_mode");
+    const devStored = localStorage.getItem('local_reader-theme') || localStorage.getItem('local_mode');
     if (devStored !== null) return normalizeTheme(JSON.parse(devStored));
-    return normalizeTheme(localStorage.getItem("vueuse-color-scheme"));
+    return normalizeTheme(localStorage.getItem('vueuse-color-scheme'));
   } catch {
-    return "auto";
+    return 'auto';
   }
 }
 
@@ -34,49 +28,45 @@ function applyTheme() {
   root.dataset.appearance = getThemeAppearance(resolvedTheme.value);
   try {
     // Synchronous mirror prevents a flash while extension storage loads next time.
-    localStorage.setItem("reader-theme", preference.value);
-  } catch {
-    /* The theme still works when storage is unavailable. */
-  }
+    localStorage.setItem('reader-theme', preference.value);
+  } catch { /* The theme still works when storage is unavailable. */ }
 }
 
 export function initializeTheme() {
   if (initialization) return initialization;
-  mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
+  mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
   preference.value = readLocalPreference();
   applyTheme();
-  mediaQuery.addEventListener("change", () => {
-    if (preference.value === "auto") applyTheme();
+  mediaQuery.addEventListener('change', () => {
+    if (preference.value === 'auto') applyTheme();
   });
-  window.addEventListener("storage", (event) => {
-    if (event.key === "reader-theme") {
+  window.addEventListener('storage', event => {
+    if (event.key === 'reader-theme') {
       preference.value = normalizeTheme(event.newValue);
       applyTheme();
     }
   });
 
   const storage = globalThis.chrome?.storage;
-  initialization = new Promise((resolve) => {
+  initialization = new Promise(resolve => {
     if (!storage?.local) {
       isLoading.value = false;
       resolve();
       return;
     }
-    storage.local.get(["reader-theme", "mode"], (result) => {
+    storage.local.get(['reader-theme', 'mode'], result => {
       const error = globalThis.chrome?.runtime?.lastError;
       if (!error) {
         // Only migrate legacy mode when a saved reader theme does not exist.
-        preference.value = normalizeTheme(
-          result?.["reader-theme"] ?? result?.mode ?? preference.value,
-        );
+        preference.value = normalizeTheme(result?.['reader-theme'] ?? result?.mode ?? preference.value);
         applyTheme();
       }
       isLoading.value = false;
       resolve();
     });
     storage.onChanged?.addListener((changes, area) => {
-      if (area === "local" && changes["reader-theme"]) {
-        preference.value = normalizeTheme(changes["reader-theme"].newValue);
+      if (area === 'local' && changes['reader-theme']) {
+        preference.value = normalizeTheme(changes['reader-theme'].newValue);
         applyTheme();
       }
     });
@@ -88,14 +78,12 @@ function setTheme(value) {
   preference.value = normalizeTheme(value);
   applyTheme();
   const storage = globalThis.chrome?.storage;
-  storage?.local?.set({ "reader-theme": preference.value });
+  storage?.local?.set({ 'reader-theme': preference.value });
 }
 
 export function useTheme() {
   initializeTheme();
-  const isDark = computed(
-    () => getThemeAppearance(resolvedTheme.value) === "dark",
-  );
+  const isDark = computed(() => getThemeAppearance(resolvedTheme.value) === 'dark');
   return {
     themes,
     themeOptions,
@@ -105,11 +93,9 @@ export function useTheme() {
     isDark,
     isLoading: readonly(isLoading),
     setTheme,
-    toggleDark: () => setTheme(isDark.value ? "light" : "dark"),
+    toggleDark: () => setTheme(isDark.value ? 'light' : 'dark'),
     cycleTheme: () => {
-      const index = themes.findIndex(
-        (theme) => theme.id === resolvedTheme.value,
-      );
+      const index = themes.findIndex(theme => theme.id === resolvedTheme.value);
       setTheme(themes[(index + 1) % themes.length].id);
     },
   };

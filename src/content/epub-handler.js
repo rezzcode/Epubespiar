@@ -1,8 +1,10 @@
 import browser from 'webextension-polyfill';
 import { validateURL, sanitizeHTML } from '../utils/security';
 
+// Track drag events
 let isDraggingEpub = false;
 
+// Maximum file size (100MB)
 const MAX_FILE_SIZE = 100 * 1024 * 1024;
 
 // Validate EPUB URL
@@ -35,6 +37,7 @@ document.addEventListener('dragstart', async (event) => {
         event.preventDefault();
       }
     } catch (error) {
+      // Log error without exposing sensitive information
       console.error('Error handling dragstart');
     }
   }

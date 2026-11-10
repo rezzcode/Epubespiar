@@ -256,7 +256,7 @@ browser.runtime.onMessage.addListener((message, sender) => {
   });
 });
 
-// use a safe way to get URL parameters
+// Safe way to get URL parameters
 function getFileParameter() {
   try {
     const urlParams = new URLSearchParams(window.location.search);

@@ -1,13 +1,7 @@
-import { useBrowserLocalStorage } from "../useBrowserStorage.js";
+import { useBrowserLocalStorage } from '../useBrowserStorage.js';
 
-export function useReadingPosition({
-  currentBookKey,
-  currentChapter,
-  chapters,
-  getScrollElement,
-}) {
-  const { data: readingPositions, promise: readingPositionsReady } =
-    useBrowserLocalStorage("readerReadingPositions", {});
+export function useReadingPosition({ currentBookKey, currentChapter, chapters, getScrollElement }) {
+  const { data: readingPositions, promise: readingPositionsReady } = useBrowserLocalStorage('readerReadingPositions', {});
   let persistTimer = null;
   const persistReadingPosition = () => {
     if (!currentBookKey.value) return;
@@ -17,13 +11,10 @@ export function useReadingPosition({
     readingPositions.value = {
       ...readingPositions.value,
       [currentBookKey.value]: {
-        scrollPercentage: Math.min(
-          100,
-          Math.max(0, (element.scrollTop / maxScroll) * 100),
-        ),
+        scrollPercentage: Math.min(100, Math.max(0, (element.scrollTop / maxScroll) * 100)),
         chapterHref: currentChapter.value,
-        timestamp: Date.now(),
-      },
+        timestamp: Date.now()
+      }
     };
   };
 
@@ -36,29 +27,23 @@ export function useReadingPosition({
     if (!currentBookKey.value || !chapters.value.length) return;
     await readingPositionsReady;
     const saved = readingPositions.value?.[currentBookKey.value];
-    if (!saved || typeof saved.scrollPercentage !== "number") return;
+    if (!saved || typeof saved.scrollPercentage !== 'number') return;
     setTimeout(() => {
       const element = getScrollElement();
       if (!element) return;
-      const maxScroll = Math.max(
-        element.scrollHeight - element.clientHeight,
-        0,
-      );
-      element.scrollTop =
-        (Math.min(100, Math.max(0, saved.scrollPercentage)) / 100) * maxScroll;
+      const maxScroll = Math.max(element.scrollHeight - element.clientHeight, 0);
+      element.scrollTop = (Math.min(100, Math.max(0, saved.scrollPercentage)) / 100) * maxScroll;
     }, 50);
     if (saved.chapterHref) currentChapter.value = saved.chapterHref;
   };
-
+  
   const dispose = () => {
     if (persistTimer) clearTimeout(persistTimer);
     persistTimer = null;
     persistReadingPosition();
   };
-  return {
-    persistReadingPosition,
-    schedulePersistReadingPosition,
-    restoreReadingPosition,
-    dispose,
-  };
+    return {
+        persistReadingPosition, schedulePersistReadingPosition,
+        restoreReadingPosition, dispose
+    };
 }

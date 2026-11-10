@@ -115,5 +115,6 @@ async function encryptData(data) {
  * @returns {Promise<any>} Decrypted data
  */
 async function decryptData(encryptedData) {
+  // This is a placeholder. In production, use proper decryption
   return JSON.parse(atob(encryptedData));
 } 
