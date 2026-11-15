@@ -130,3 +130,9 @@ Both paths end by opening the extension reader with:
 - [ ] Epub book library
 - [ ] Download status: This shows the progress of your download
 - [x] What you thought was, but is not, while using the extension
+
+## Resources
+
+- [Contributing to Epubespiar](CONTRIBUTING.md) and reader development guides
+- [Keyboard shortcuts](docs/keyboard-shortcuts.md)
+- [Reader themes](docs/THEMES.md)

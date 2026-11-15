@@ -41,6 +41,11 @@ After editing, rebuild and reload the extension from the same browser page. Reop
 
 Follow the conventions of the code you touch. Keep the extension lightweight by checking whether the existing code or dependencies can handle the change. For a new dependency or browser permission, explain what it enables in the pull request.
 
+## Reader development guides
+
+- [Keyboard shortcuts](docs/keyboard_shortcuts.md) explains how bindings map to reader actions, when shortcuts are available, and how to verify changes.
+- [Reader themes](docs/THEMES.md) explains theme selection and persistence, where styles live, and how to add and verify a palette.
+
 ## Test the paths you changed
 
 Use a public-domain or redistributable EPUB. Run the relevant checks below and record the browser, version, and result in your pull request.
