@@ -65,3 +65,7 @@ and resetting font size does not reset zoom, font family, or font weight.
 - [Reader settings](../src/composables/reader/useReaderSettings.js) define the defaults and limits for zoom and font size. Check the toolbar and settings controls when changing those ranges.
 
 To add a shortcut, update its binding and reader action, then add it to the table above. Build and load the extension in Chrome and Firefox. Check the shortcut with a book open, with the bookshelf open, and with focus in a search field or dialog. For adjustment shortcuts, check held keys, limits, and whether the preference persists after reloading.
+
+Note: The Keyboard combination might not work while testing the Extension over `localhost:port-number`
+      Thus building it and testing it on the browser is recommended
+
