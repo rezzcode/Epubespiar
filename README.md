@@ -44,11 +44,6 @@ EPUB opening currently follows two real paths:
 - **Vite**: Fast build tool and development server
 - **Manifest V3**: Latest Chrome extension API
 
-## Reader guides
-
-- [Keyboard shortcuts](docs/keyboard-shortcuts.md) for navigation, zoom, and font size.
-- [Reader themes](docs/THEMES.md) for choosing, maintaining, and adding themes.
-
 ## Development
 
 ```bash
@@ -135,3 +130,9 @@ Both paths end by opening the extension reader with:
 - [ ] Epub book library
 - [ ] Download status: This shows the progress of your download
 - [x] What you thought was, but is not, while using the extension
+
+## Resources
+
+- [Contributing to Epubespiar](CONTRIBUTING.md) and reader development guides
+- [Keyboard shortcuts](docs/keyboard-shortcuts.md)
+- [Reader themes](docs/THEMES.md)
