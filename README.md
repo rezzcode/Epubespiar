@@ -44,6 +44,11 @@ EPUB opening currently follows two real paths:
 - **Vite**: Fast build tool and development server
 - **Manifest V3**: Latest Chrome extension API
 
+## Reader guides
+
+- [Keyboard shortcuts](docs/keyboard-shortcuts.md) for navigation, zoom, and font size.
+- [Reader themes](docs/THEMES.md) for choosing, maintaining, and adding themes.
+
 ## Development
 
 ```bash
